@@ -133,7 +133,7 @@ def write_parquet_chunks(df: pd.DataFrame, out_dir: Path, prefix: str, rows_per_
     paths = []
     for i, a, b in _chunk_bounds(len(df), rows_per_file):
         p = out_dir / f"{prefix}_{i:04d}.parquet"
-        df.iloc[a:b].to_parquet(p, index=False, engine="pyarrow")
+        df.iloc[a:b].to_parquet(p, index=False, engine="pyarrow", coerce_timestamps="us", allow_truncated_timestamps=True)
         paths.append(p)
     return paths
 

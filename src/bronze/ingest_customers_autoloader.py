@@ -32,22 +32,22 @@ def ingest(spark=None):
     checkpoint = config.checkpoint_path(f"bronze_{SOURCE}")
     target = config.table("bronze", SOURCE)            # insurance.bronze.customers
 
-    # TODO 1: build the Auto Loader readStream
-    #   stream = (spark.readStream.format("cloudFiles")
-    #       .option("cloudFiles.format", "csv")
-    #       .option("header", "true")
-    #       .option("cloudFiles.schemaLocation", checkpoint)
-    #       .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
-    #       .option("rescuedDataColumn", "_rescued_data")
-    #       .load(src_path))
-    # TODO 2: add ingestion metadata
-    #   .selectExpr("*", "_metadata.file_path AS _source_file", "current_timestamp() AS _ingest_ts")
+    stream = (spark.readStream.format("cloudFiles") # TODO 1: build the Auto Loader readStream
+        .option("cloudFiles.format", "csv")
+        .option("header", "true")
+        .option("cloudFiles.schemaLocation", checkpoint)
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("rescuedDataColumn", "_rescued_data")
+        .load(src_path)
+        .selectExpr("*", "_metadata.file_path AS _source_file", "current_timestamp() AS _ingest_ts"))  # TODO 2: add ingestion metadata
+      
     # TODO 3: write the stream (batch-incremental is budget-friendly on Free Edition)
-    #   (stream.writeStream
-    #       .option("checkpointLocation", checkpoint)
-    #       .trigger(availableNow=True)
-    #       .toTable(target))
-    raise NotImplementedError("Implement the customers Auto Loader ingestion — see studybook M2.")
+    (stream.writeStream
+        .option("checkpointLocation", checkpoint)
+        .trigger(availableNow=True)
+        .toTable(target))
+    
+    # raise NotImplementedError("Implement the customers Auto Loader ingestion — see studybook M2.")
 
 
 if __name__ == "__main__":
