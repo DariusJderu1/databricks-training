@@ -32,7 +32,9 @@ def ingest_policies(spark=None):
     # TODO: read JSON with multiLine=true (read_files(..., format=>'json', multiLine=>true)
     #       OR Auto Loader cloudFiles json), add _source_file + _ingest_ts, write to `target`.
     #       Keep `coverages` nested — do NOT explode here (that's silver/conform_policies).
-    raise NotImplementedError("Implement policies JSON ingestion (multiLine) — see studybook M2.")
+    # raise NotImplementedError("Implement policies JSON ingestion (multiLine) — see studybook M2.")
+
+    print(src_path, target, sep="\n")
 
 
 def ingest_claims(spark=None):
