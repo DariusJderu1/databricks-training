@@ -34,7 +34,15 @@ def ingest_policies(spark=None):
     #       Keep `coverages` nested — do NOT explode here (that's silver/conform_policies).
     # raise NotImplementedError("Implement policies JSON ingestion (multiLine) — see studybook M2.")
 
-    print(src_path, target, sep="\n")
+    # CREATE OR REPLACE TABLE policies AS 
+    # SELECT *, _metadata.file_path AS _source_file, current_timestamp() AS _ingest_ts
+    # FROM read_files("/Volumes/insurance/landing/raw/policies", format => "json", multiLine => true);
+
+    spark.sql(f"""
+            CREATE OR REPLACE TABLE {target} AS 
+            SELECT *, _metadata.file_path AS _source_file, current_timestamp() AS _ingest_ts 
+            FROM read_files('{src_path}', format => "json", multiLine => true);
+    """)
 
 
 def ingest_claims(spark=None):
