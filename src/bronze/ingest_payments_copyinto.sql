@@ -18,10 +18,10 @@ CREATE SCHEMA IF NOT EXISTS insurance.bronze;
 CREATE TABLE IF NOT EXISTS insurance.bronze.payments;
 
 -- TODO 2: COPY INTO from the payments folder. Fill in the FILEFORMAT and options.
--- COPY INTO insurance.bronze.payments
--- FROM '/Volumes/insurance/landing/raw/payments'
--- FILEFORMAT = PARQUET
--- COPY_OPTIONS ('mergeSchema' = 'true');
+COPY INTO insurance.bronze.payments
+FROM '/Volumes/insurance/landing/raw/payments'
+FILEFORMAT = PARQUET
+COPY_OPTIONS ('mergeSchema' = 'true');
 
 -- TODO 3: verify idempotency — run the COPY INTO again and confirm 0 rows are added.
--- SELECT count(*) FROM insurance.bronze.payments;
+SELECT count(*) FROM insurance.bronze.payments;
