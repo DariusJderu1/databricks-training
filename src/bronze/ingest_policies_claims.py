@@ -50,9 +50,25 @@ def ingest_claims(spark=None):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('bronze')}")
     target = config.table("bronze", "claims")
     src_path = config.volume_path("claims")
+
     # TODO: read newline-delimited JSON (Auto Loader cloudFiles json or read_files),
     #       add ingestion metadata, write to `target`.
-    raise NotImplementedError("Implement claims JSON ingestion — see studybook M2.")
+    # raise NotImplementedError("Implement claims JSON ingestion — see studybook M2.")
+
+    checkpoint = config.checkpoint_path("bronze_claims")
+
+    stream = (spark.readStream.format("cloudFiles") 
+        .option("cloudFiles.format", "json")
+        .option("cloudFiles.schemaLocation", checkpoint)
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("rescuedDataColumn", "_rescued_data")
+        .load(src_path)
+        .selectExpr("*", "_metadata.file_path AS _source_file", "current_timestamp() AS _ingest_ts"))  
+      
+    (stream.writeStream
+        .option("checkpointLocation", checkpoint)
+        .trigger(availableNow=True)
+        .toTable(target))
 
 
 if __name__ == "__main__":
