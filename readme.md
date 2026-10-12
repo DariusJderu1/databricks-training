@@ -50,6 +50,47 @@ There is no particular order in which you have to choose to begin with them.
 
 ---
 
+## Commit Style
+
+Use [Conventional Commits](https://www.conventionalcommits.org/) for changes to this
+training repository:
+
+```text
+<type>(<optional scope>): <short description>
+
+<optional body explaining why the change is needed>
+```
+
+| Type | Use for | Example |
+| --- | --- | --- |
+| `feat` | New training exercises or lakehouse capabilities | `feat(bronze): add claims ingestion exercise` |
+| `fix` | Corrections to notebooks, SQL, pipelines, or setup | `fix(silver): handle null policy dates` |
+| `chore` | Maintenance, dependencies, or bundle configuration | `chore(bundle): update dev target settings` |
+| `refactor` | Restructuring code without changing behavior | `refactor(gold): share date dimension logic` |
+| `docs` | README, chapters, and studybook changes | `docs(chapters): clarify Unity Catalog setup` |
+| `test` | Adding or updating automated tests | `test(generator): cover missing claim fields` |
+
+Use an imperative subject ("add", not "added"), keep it under 50 characters,
+and omit the trailing period. Make one logical change per commit. If a body is
+needed, explain *why* the change matters and wrap lines at 72 characters.
+When working from a GitHub issue, reference it in the body (for example,
+`Closes #42`); no issue is required for a standalone training exercise.
+
+### Branch Naming
+
+Branch from `main`. Use lowercase, hyphen-separated words and the same type
+as your commit. Include the issue number when there is one:
+
+```text
+<type>/<issue-number>-<short-description>
+# Examples: feat/42-bronze-claims-ingestion, fix/57-silver-null-dates
+```
+
+For practice work without an issue, omit the number (for example,
+`docs/unity-catalog-setup`). Keep branch names short and descriptive.
+
+---
+
 > **Building the project (mentors & self-learners):** the deep theory + code companion is the
 > [studybook](https://github.com/msg-CareerPaths/databricks-training/blob/main/docs/studybook/00_index.md);
 > environment setup, **repository layout, and quickstart** are in the
