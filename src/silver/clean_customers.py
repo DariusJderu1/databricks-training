@@ -80,9 +80,9 @@ def build(spark=None):
     # TODO 3: parse date_of_birth (try multiple formats; null-out future/garbage dates).
     clean = (clean.withColumn("date_of_birth", 
                 F.coalesce( # give the first non null result, if all are garbage - return null
-                    F.to_date("date_of_birth", "yyyy-MM-dd"),
-                    F.to_date("date_of_birth", "MM/dd/yyyy"),
-                    F.to_date("date_of_birth", "dd-MMM-yyyy"))
+                    F.try_to_date("date_of_birth", "yyyy-MM-dd"),
+                    F.try_to_date("date_of_birth", "MM/dd/yyyy"),
+                    F.try_to_date("date_of_birth", "dd-MMM-yyyy"))
                 )
                 .withColumn("dob_future_flag", F.col("date_of_birth") > F.current_date()) # creates a new boolean column, if the date is in the future
                 .withColumn("date_of_birth", F.when( # if
