@@ -127,6 +127,26 @@ def build(spark=None):
     (policies.write.mode("overwrite")  
             .saveAsTable(config.table("silver", "policies")))
 
+    # TODO 6: explode coverages -> silver.policy_coverages
+    coverages = (
+        coverages
+        .select(
+            "policy_id",
+            "product_line",
+            F.explode("coverages").alias("coverage")
+        )
+        .select(
+            "policy_id",
+            "product_line",
+            "coverage.coverage_code",
+            "coverage.limit",
+            "coverage.deductible",
+            "coverage.peril_code"
+        )
+    )
+
+    (coverages.write.mode("overwrite")  
+                .saveAsTable(config.table("silver", "policy_coverages")))
 
 if __name__ == "__main__":
     build()
