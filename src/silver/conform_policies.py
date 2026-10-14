@@ -48,7 +48,6 @@ def build(spark=None):
         .withColumn("annual_premium",
                     F.regexp_replace(F.col("annual_premium").cast("string"), r"[$,]", "").cast("double"))
         .withColumn("premium_valid", F.col("annual_premium") >= 0)
-        .withColumn("status", F.upper(F.trim("status")))
         # TODO 3: parse effective_date / expiration_date.
         .withColumn("effective_date", F.coalesce(
                                         F.try_to_date("effective_date", "yyyy-MM-dd"),
@@ -57,8 +56,32 @@ def build(spark=None):
         .withColumn("expiration_date", F.coalesce(
                                         F.try_to_date("expiration_date", "yyyy-MM-dd"),
                                         F.try_to_date("expiration_date", "MM/dd/yyyy"),
-                                        F.try_to_date("expiration_date", "dd-MMM-yyyy"))))
+                                        F.try_to_date("expiration_date", "dd-MMM-yyyy")))
+        # for the TODO 2 trimming & uppercase
+        .withColumn("status", F.upper(F.trim("status"))))
 
+
+    # TODO 2: map status typos to canonical values
+    
+    # the invalid status condition
+    invalid_status = (
+        F.col("status").isNull()
+        | (
+            (F.col("status") != "ACTIVE")
+            & (F.col("status") != "CANCELLED")
+            & (F.col("status") != "LAPSED")
+            & (F.col("status") != "PENDING")
+        )
+    )
+
+    # the quarantine status
+    status_quarantine = (
+        policies.where(invalid_status)
+        .withColumn("_dq_reason", F.lit("invalid_status"))
+    )
+
+    # clean policies without that invalid status
+    policies = policies.where(~invalid_status)
 
 if __name__ == "__main__":
     build()
