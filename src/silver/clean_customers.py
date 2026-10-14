@@ -65,16 +65,7 @@ def build(spark=None):
               .withColumn("state", F.col("state_code")))
 
     # this is the condition based on what I will check the rows that are invalid
-    invalid =  F.col("state_code").isNull()
-
-    # the table for quarantine 
-    state_quarantine = (clean.where(invalid)
-                  .withColumn("_dq_reason", F.lit("invalid_state"))
-                  .drop("state_code", "state"))
-
-    # keep only rows with a valid state
-    clean = (clean.where(~invalid)
-             .drop("state_code", "state_raw"))
+    invalid_state =  F.col("state_code").isNull()
 
                         
     # TODO 3: parse date_of_birth (try multiple formats; null-out future/garbage dates).
@@ -91,12 +82,25 @@ def build(spark=None):
                             ).otherwise(F.col("date_of_birth"))) # else keep the value from date_of_birth
                 .drop("dob_future_flag")) 
 
+    # invalid date of birth condition
     invalid_dob = F.col("date_of_birth").isNull()
 
+    # the table for the dob quarantine
     dob_quarantine = (clean.where(invalid_dob)
                             .withColumn("_dq_reason", F.lit("invalid_date_of_birth")))
 
+    # clean the rows with invalid dob
     clean = clean.where(~invalid_dob)
+
+    # Move the state logic here because of conversion problems
+    # the table for quarantine for state
+    state_quarantine = (clean.where(invalid_state)
+                      .withColumn("_dq_reason", F.lit("invalid_state"))
+                      .drop("state_code", "state"))
+    
+    # keep only rows with a valid state
+    clean = (clean.where(~invalid_state)
+            .drop("state_code", "state_raw"))
 
 
     # TODO 4: dedupe — exact first, then fuzzy (same customer_id, normalized attrs).
