@@ -148,5 +148,12 @@ def build(spark=None):
     (coverages.write.mode("overwrite")  
                 .saveAsTable(config.table("silver", "policy_coverages")))
 
+
+    # Union the quarantine tables and save it
+    quarantine = (status_quarantine.unionByName(customer_id_quarantine, allowMissingColumns=True))
+
+    (quarantine.write.mode("overwrite")
+            .saveAsTable(config.table("silver", "policies_quarantine")))
+
 if __name__ == "__main__":
     build()
