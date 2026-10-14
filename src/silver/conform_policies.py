@@ -31,7 +31,7 @@ def build(spark=None):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('silver')}")
 
     policies = spark.read.table(config.table("bronze", "policies"))
-    # customers = spark.read.table(config.table("silver", "customers"))  # for the orphan anti-join
+    customers = spark.read.table(config.table("silver", "customers"))  # for the orphan anti-join
 
     # TODO 1: clean annual_premium (regexp_replace currency/commas -> cast double; drop/flag negatives).
     # TODO 2: map status typos to canonical values.
@@ -82,6 +82,26 @@ def build(spark=None):
 
     # clean policies without that invalid status
     policies = policies.where(~invalid_status)
+
+    # TODO 4: anti-join to silver.customers to find orphan customer_id -> quarantine.
+
+    # the quarantine table for the rows that have no valid customer_id
+    customer_id_quarantine = (
+        policies.join(
+            customers,
+            policies.customer_id == customers.customer_id,
+            "left_anti" # keep the rows from the left df (policies) for which there is no match on the right df
+        )
+        .withColumn("_dq_reason", F.lit("invalid_customer_id"))
+    )
+
+    # clean the table
+    policies = policies.join(
+        customers,
+        policies.customer_id == customers.customer_id,
+        "left_semi" # keep the rows from the left df policies for which there is a match on the right side - customers
+    )
+
 
 if __name__ == "__main__":
     build()
