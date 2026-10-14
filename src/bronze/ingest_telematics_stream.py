@@ -36,7 +36,20 @@ def ingest(spark=None):
     # TODO 3: writeStream with checkpointLocation, trigger(availableNow=True), toTable(target).
     # NOTE: on Free Edition you use directory-listing discovery (file-notification needs an
     #       access mode that serverless/FE does not provide).
-    raise NotImplementedError("Implement the telematics Auto Loader stream — see studybook M2.")
+    # raise NotImplementedError("Implement the telematics Auto Loader stream — see studybook M2.")
+
+    stream = (spark.readStream.format("cloudFiles") 
+                .option("cloudFiles.format", "json")
+                .option("cloudFiles.schemaLocation", checkpoint)
+                .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+                .option("rescuedDataColumn", "_rescued_data")
+                .load(src_path)
+                .selectExpr("*", "_metadata.file_path AS _source_file", "current_timestamp() AS _ingest_ts"))  
+          
+    (stream.writeStream
+        .option("checkpointLocation", checkpoint)
+        .trigger(availableNow=True)
+        .toTable(target))
 
 
 if __name__ == "__main__":
