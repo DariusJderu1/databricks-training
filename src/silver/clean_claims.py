@@ -41,8 +41,15 @@ def build(spark=None):
     # TODO 3: parse claim_date / loss_date.
     # TODO 4: join silver.policies; flag/quarantine loss_amount > sum_insured and orphan policy_id.
     # TODO 5: write silver.claims + silver.claims_quarantine; record counts for the DQ scorecard.
-    raise NotImplementedError("Implement claims cleaning — see studybook M3.")
+    # raise NotImplementedError("Implement claims cleaning — see studybook M3.")
 
+    # TODO 1: normalize fraud_flag -> boolean
+    claims = (
+        claims
+        .withColumn("fraud_flag", F.when(
+                                    F.lower(F.trim("fraud_flag")).isin(TRUE_TOKENS), F.lit(True))
+                                  .otherwise(F.lit(False)))
+    )
 
 if __name__ == "__main__":
     build()
