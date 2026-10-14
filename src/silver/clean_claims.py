@@ -52,6 +52,7 @@ def build(spark=None):
                                   .otherwise(F.lit(False)))
     )
 
+
     # TODO 2: map claim_status typos via ref_claim_status (broadcast join).
     status = status.select("status_code")
 
@@ -77,6 +78,53 @@ def build(spark=None):
     )
 
     claims = claims.where(~invalid_status).drop("status_code")
+
+
+    # TODO 3: parse claim_date / loss_date.
+    claims = (
+        claims
+        .withColumn("claim_date", F.coalesce(
+            F.try_to_date("claim_date", "yyyy-MM-dd"),
+            F.try_to_date("claim_date", "MM/dd/yyyy"),
+            F.try_to_date("claim_date", "dd-MMM-yyyy")
+        ))
+        .withColumn("claim_date_future_flag",
+                    F.col("claim_date") > F.current_date())
+        .withColumn("claim_date", F.when(
+            F.col("claim_date_future_flag"),
+            F.lit(None).cast("date")
+        ).otherwise(F.col("claim_date")))
+        .drop("claim_date_future_flag")
+    )
+
+    claims = (
+        claims
+        .withColumn("loss_date", F.coalesce(
+            F.try_to_date("loss_date", "yyyy-MM-dd"),
+            F.try_to_date("loss_date", "MM/dd/yyyy"),
+            F.try_to_date("loss_date", "dd-MMM-yyyy")
+        ))
+        .withColumn("loss_date_future_flag",
+                    F.col("loss_date") > F.current_date())
+        .withColumn("loss_date", F.when(
+            F.col("loss_date_future_flag"),
+            F.lit(None).cast("date")
+        ).otherwise(F.col("loss_date")))
+        .drop("loss_date_future_flag")
+    )
+
+    invalid_claim_date = F.col("claim_date").isNull()
+    invalid_loss_date = F.col("loss_date").isNull()
+
+    invalid_dates = invalid_claim_date | invalid_loss_date
+
+    date_quarantine = (
+        claims
+        .where(invalid_dates)
+        .withColumn("_dq_reason", F.lit("invalid_claim_or_loss_date"))
+    )
+
+    claims = claims.where(~invalid_dates)
 
 if __name__ == "__main__":
     build()
