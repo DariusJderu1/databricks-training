@@ -23,6 +23,8 @@ from __future__ import annotations
 
 from pyspark.sql import functions as F  # noqa: F401
 
+from pyspark.sql import Window
+
 from src.common import config
 
 
@@ -47,7 +49,7 @@ def build(spark=None):
     policies = (policies
         .withColumn("annual_premium",
                     F.regexp_replace(F.col("annual_premium").cast("string"), r"[$,]", "").cast("double"))
-        .withColumn("premium_valid", F.col("annual_premium") >= 0)
+        .withColumn("premium_valid", F.col("annual_premium") > 0)
         # TODO 3: parse effective_date / expiration_date.
         .withColumn("effective_date", F.coalesce(
                                         F.try_to_date("effective_date", "yyyy-MM-dd"),
@@ -101,6 +103,29 @@ def build(spark=None):
         policies.customer_id == customers.customer_id,
         "left_semi" # keep the rows from the left df policies for which there is a match on the right side - customers
     )
+
+    # TODO 5: write silver.policies (one row per policy, drop the coverages array).
+
+    # Dedupe - one row per policy
+    policies = policies.dropDuplicates() # dedupes all the rows, based on each of the columns
+    
+    w = (Window.partitionBy("policy_id") 
+            .orderBy(F.col("_ingest_ts").desc_nulls_last())) 
+
+    # fuzzy
+    policies = (
+        policies
+            .withColumn("_rn", F.row_number().over(w)) # adds the _rn column that represents the row number over the window
+            .where("_rn = 1") # where the rows have the _rn column 1 (like it keeps only the rows that have that column 1.)
+            .drop("_rn") # deletes the column _rn
+    ) 
+
+    coverages = policies
+
+    policies = policies.drop("coverages")
+
+    (policies.write.mode("overwrite")  
+            .saveAsTable(config.table("silver", "policies")))
 
 
 if __name__ == "__main__":
