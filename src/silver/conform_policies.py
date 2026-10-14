@@ -55,6 +55,12 @@ def build(spark=None):
                                         F.try_to_date("effective_date", "yyyy-MM-dd"),
                                         F.try_to_date("effective_date", "MM/dd/yyyy"),
                                         F.try_to_date("effective_date", "dd-MMM-yyyy")))
+            .withColumn("effective_date_flag", F.col("effective_date") > F.current_date()) # creates a new boolean column, if the date is in the future
+                .withColumn("effective_date", F.when( # if
+                                                F.col("effective_date_flag"), # this is true
+                                                F.lit(None).cast("date") # column becomes null
+                                            ).otherwise(F.col("effective_date"))) # else keep the value
+                .drop("effective_date_flag") 
         .withColumn("expiration_date", F.coalesce(
                                         F.try_to_date("expiration_date", "yyyy-MM-dd"),
                                         F.try_to_date("expiration_date", "MM/dd/yyyy"),
@@ -62,7 +68,12 @@ def build(spark=None):
         # for the TODO 2 trimming & uppercase
         .withColumn("status", F.upper(F.trim("status"))))
 
+    # TODO 3
+    invalid_effective_date = F.col("effective_date").isNull()
 
+    effective_date_quarantine = (policies.where(invalid_effective_date)
+                                .withColumn("_dq_reason", F.lit("future_effective_date")))
+    
     # TODO 2: map status typos to canonical values
     
     # the invalid status condition
@@ -150,7 +161,11 @@ def build(spark=None):
 
 
     # Union the quarantine tables and save it
-    quarantine = (status_quarantine.unionByName(customer_id_quarantine, allowMissingColumns=True))
+    quarantine = (
+        status_quarantine
+        .unionByName(customer_id_quarantine, allowMissingColumns=True)
+        .unionByName(effective_date_quarantine, allowMissingColumns=True)
+    )
 
     (quarantine.write.mode("overwrite")
             .saveAsTable(config.table("silver", "policies_quarantine")))
