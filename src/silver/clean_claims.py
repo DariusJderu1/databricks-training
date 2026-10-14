@@ -34,6 +34,7 @@ def build(spark=None):
 
     claims = spark.read.table(config.table("bronze", "claims"))
     # policies = spark.read.table(config.table("silver", "policies"))   # for orphan + sum_insured checks
+    status = spark.read.table(config.table("bronze", "ref_claim_status")) 
 
     # TODO 1: normalize fraud_flag -> boolean
     #   F.lower(F.trim("fraud_flag")).isin(TRUE_TOKENS)
@@ -50,6 +51,32 @@ def build(spark=None):
                                     F.lower(F.trim("fraud_flag")).isin(TRUE_TOKENS), F.lit(True))
                                   .otherwise(F.lit(False)))
     )
+
+    # TODO 2: map claim_status typos via ref_claim_status (broadcast join).
+    status = status.select("status_code")
+
+    claims = (
+        claims
+        .withColumn("claim_status", F.trim("claim_status"))
+    )
+    
+    claims = (
+        claims
+        .join(F.broadcast(status), # uses the broadcast method for the small table (the result is a table with the columns from both sides)
+            claims.claim_status == status.status_code, "left") # uses a left join 
+        .withColumn("claim_status", F.col("status_code"))
+    )
+    
+    # this is the condition based on what I will check the rows that are invalid
+    invalid_status =  F.col("status_code").isNull()
+
+    status_quarantine = (
+        claims.where(invalid_status)
+        .withColumn("_dq_reason", F.lit("invalid_claim_status"))
+        .drop("status_code")
+    )
+
+    claims = claims.where(~invalid_status).drop("status_code")
 
 if __name__ == "__main__":
     build()
