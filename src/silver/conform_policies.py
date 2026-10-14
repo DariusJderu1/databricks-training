@@ -40,7 +40,24 @@ def build(spark=None):
     # TODO 5: write silver.policies (one row per policy, drop the coverages array).
     # TODO 6: explode coverages -> silver.policy_coverages
     #   policies.select("policy_id", F.explode("coverages").alias("c")).select("policy_id", "c.*")
-    raise NotImplementedError("Implement policies conform + coverages explode — see studybook M3.")
+    # raise NotImplementedError("Implement policies conform + coverages explode — see studybook M3.")
+
+    # TODO 1: clean annual_premium (regexp_replace currency/commas -> cast double; drop/flag negatives).
+    # numeric-as-string "$1,234.50" -> double, then negatives are invalid
+    policies = (policies
+        .withColumn("annual_premium",
+                    F.regexp_replace(F.col("annual_premium").cast("string"), r"[$,]", "").cast("double"))
+        .withColumn("premium_valid", F.col("annual_premium") >= 0)
+        .withColumn("status", F.upper(F.trim("status")))
+        # TODO 3: parse effective_date / expiration_date.
+        .withColumn("effective_date", F.coalesce(
+                                        F.try_to_date("effective_date", "yyyy-MM-dd"),
+                                        F.try_to_date("effective_date", "MM/dd/yyyy"),
+                                        F.try_to_date("effective_date", "dd-MMM-yyyy")))
+        .withColumn("expiration_date", F.coalesce(
+                                        F.try_to_date("expiration_date", "yyyy-MM-dd"),
+                                        F.try_to_date("expiration_date", "MM/dd/yyyy"),
+                                        F.try_to_date("expiration_date", "dd-MMM-yyyy"))))
 
 
 if __name__ == "__main__":
