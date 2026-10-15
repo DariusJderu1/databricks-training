@@ -44,7 +44,7 @@ def build(spark=None):
     # TODO 5: write silver.claims + silver.claims_quarantine; record counts for the DQ scorecard.
     # raise NotImplementedError("Implement claims cleaning — see studybook M3.")
 
-    # TODO 1: normalize fraud_flag -> boolean
+    # TODO 1: normalize fraud_flag -> boolean + some castings/trimmings for the future
     claims = (
         claims
         .withColumn("fraud_flag", F.when(
@@ -53,35 +53,12 @@ def build(spark=None):
                                   .otherwise(F.lit(False)))
     )
 
-
-    # TODO 2: map claim_status typos via ref_claim_status (broadcast join).
-    status = status.select("status_code")
-
     claims = (
         claims
-        .withColumn("claim_status", F.trim("claim_status"))
-    )
-    
-    claims = (
-        claims
-        .join(F.broadcast(status), # uses the broadcast method for the small table (the result is a table with the columns from both sides)
-            claims.claim_status == status.status_code, "left") # uses a left join 
-        .withColumn("claim_status", F.col("status_code"))
-    )
-    
-    # this is the condition based on what I will check the rows that are invalid
-    invalid_status =  F.col("status_code").isNull()
-
-    status_quarantine = (
-        claims.where(invalid_status)
-        .withColumn("_dq_reason", F.lit("invalid_claim_status"))
-        .drop("status_code")
+        .withColumn("loss_amount",
+            F.regexp_replace(F.col("loss_amount"), r"[$,]", "").cast("double"))
     )
 
-    claims = claims.where(~invalid_status).drop("status_code")
-
-
-    # TODO 3: parse claim_date / loss_date.
     claims = (
         claims
         .withColumn("claim_date", F.coalesce(
@@ -113,6 +90,36 @@ def build(spark=None):
         ).otherwise(F.col("loss_date")))
         .drop("loss_date_future_flag")
     )
+
+
+    # TODO 2: map claim_status typos via ref_claim_status (broadcast join).
+    status = status.select("status_code")
+
+    claims = (
+        claims
+        .withColumn("claim_status", F.trim("claim_status"))
+    )
+    
+    claims = (
+        claims
+        .join(F.broadcast(status), # uses the broadcast method for the small table (the result is a table with the columns from both sides)
+            claims.claim_status == status.status_code, "left") # uses a left join 
+        .withColumn("claim_status", F.col("status_code"))
+    )
+    
+    # this is the condition based on what I will check the rows that are invalid
+    invalid_status =  F.col("status_code").isNull()
+
+    status_quarantine = (
+        claims.where(invalid_status)
+        .withColumn("_dq_reason", F.lit("invalid_claim_status"))
+        .drop("status_code")
+    )
+
+    claims = claims.where(~invalid_status).drop("status_code")
+
+
+    # TODO 3: parse claim_date / loss_date.
 
     invalid_claim_date = F.col("claim_date").isNull()
     invalid_loss_date = F.col("loss_date").isNull()
@@ -151,7 +158,6 @@ def build(spark=None):
 
     claims = (
         claims
-        .withColumn("loss_amount", F.regexp_replace(F.col("loss_amount").cast("string"), r"[$,]", "").cast("double"))
         .withColumn("sum_insured", F.regexp_replace(F.col("sum_insured").cast("string"), r"[$,]", "").cast("double"))
     )
 
@@ -175,6 +181,44 @@ def build(spark=None):
     )
 
     claims = claims.where(~invalid_amount).drop("sum_insured")
+
+
+    # TODO 5: write silver.claims + silver.claims_quarantine; record counts for the DQ scorecard.
+
+    quarantine = (
+        status_quarantine
+        .unionByName(date_quarantine, allowMissingColumns=True)
+        .unionByName(policy_id_quarantine, allowMissingColumns=True)
+        .unionByName(amount_quarantine, allowMissingColumns=True)
+    )
+
+    (claims.write.mode("overwrite")
+        .saveAsTable(config.table("silver", "claims")))
+
+    (quarantine.write.mode("overwrite")
+        .saveAsTable(config.table("silver", "claims_quarantine")))
+
+
+    # record counts for the DQ scorecard.
+    # creates a df with the alias passed containing the number of rows from claims
+    passed_counts = claims.agg(F.count("*").alias("passed"))
+
+    # same as above for quarantine
+    quarantine_counts = quarantine.agg(F.count("*").alias("quarantined"))
+
+    scorecard = (
+        passed_counts
+        .crossJoin(quarantine_counts)
+        .withColumn("table_name", F.lit(config.table("silver", "claims")))
+        .withColumn("run_ts", F.current_timestamp())
+    )
+
+    spark.sql(
+        f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('ops')}"
+    )
+
+    (scorecard.write.mode("append")
+        .saveAsTable(config.table("ops", "dq_scorecard")))
 
 if __name__ == "__main__":
     build()
