@@ -78,4 +78,21 @@ def write_scorecard(spark, table_name: str, passed: int, quarantined: int, per_r
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('ops')}")
     # TODO: insert (table_name, passed, quarantined, per_rule map, current_timestamp()) into
     #       config.table('ops', 'dq_scorecard').
-    raise NotImplementedError("Implement the DQ scorecard write — see studybook M3/M4.")
+    # raise NotImplementedError("Implement the DQ scorecard write — see studybook M3/M4.")
+
+    # TODO: insert (table_name, passed, quarantined, per_rule map, current_timestamp()) into
+        #       config.table('ops', 'dq_scorecard').
+
+    scorecard = (
+        spark.createDataFrame( # transforms the data in a spark data frame
+            [(table_name, passed, quarantined, per_rule)], # a list of a tuple
+            schema=(
+                "table_name string, passed long, quarantined long, "
+                "per_rule map<string,long>"
+            )
+        )
+        .withColumn("run_ts", F.current_timestamp())
+    )
+
+    (scorecard.write.mode("append")
+        .saveAsTable(config.table("ops", "dq_scorecard")))
