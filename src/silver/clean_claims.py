@@ -33,7 +33,7 @@ def build(spark=None):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('silver')}")
 
     claims = spark.read.table(config.table("bronze", "claims"))
-    # policies = spark.read.table(config.table("silver", "policies"))   # for orphan + sum_insured checks
+    policies = spark.read.table(config.table("silver", "policies"))   # for orphan + sum_insured checks
     status = spark.read.table(config.table("bronze", "ref_claim_status")) 
 
     # TODO 1: normalize fraud_flag -> boolean
@@ -48,7 +48,8 @@ def build(spark=None):
     claims = (
         claims
         .withColumn("fraud_flag", F.when(
-                                    F.lower(F.trim("fraud_flag")).isin(TRUE_TOKENS), F.lit(True))
+                                    F.lower(F.trim("fraud_flag")).isin(TRUE_TOKENS), 
+                                    F.lit(True))
                                   .otherwise(F.lit(False)))
     )
 
@@ -125,6 +126,55 @@ def build(spark=None):
     )
 
     claims = claims.where(~invalid_dates)
+
+
+    # TODO 4: join silver.policies; flag/quarantine loss_amount > sum_insured and orphan policy_id.
+
+    # the quarantine table for the rows that have no valid policy_id
+    policy_id_quarantine = (
+        claims.join(
+            policies,
+            claims.policy_id == policies.policy_id,
+            "left_anti" 
+        )
+        .withColumn("_dq_reason", F.lit("orphan_policy_id"))
+    )
+
+    # clean the table and keeps the sum_insured, not 2 policy ids
+    claims = claims.join(
+        policies.select("policy_id", "sum_insured"),
+        on="policy_id",
+        how="inner"
+    )
+
+    # loss_amount > sum_insured
+
+    claims = (
+        claims
+        .withColumn("loss_amount", F.regexp_replace(F.col("loss_amount").cast("string"), r"[$,]", "").cast("double"))
+        .withColumn("sum_insured", F.regexp_replace(F.col("sum_insured").cast("string"), r"[$,]", "").cast("double"))
+    )
+
+    invalid_amount = (
+        F.col("loss_amount").isNull()
+        | F.col("sum_insured").isNull()
+        | (F.col("loss_amount") > F.col("sum_insured"))
+    )
+
+    amount_quarantine = (
+        claims.where(invalid_amount)
+        .withColumn(
+            "_dq_reason",
+            F.when(
+                F.col("loss_amount").isNull()
+                | F.col("sum_insured").isNull(),
+                F.lit("missing_or_invalid_amount")
+            )
+            .otherwise(F.lit("loss_exceeds_sum_insured"))
+        )
+    )
+
+    claims = claims.where(~invalid_amount).drop("sum_insured")
 
 if __name__ == "__main__":
     build()
