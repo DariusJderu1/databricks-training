@@ -69,10 +69,29 @@ def build(spark=None):
         .withColumn("status", F.upper(F.trim("status"))))
 
     # TODO 3
-    invalid_effective_date = F.col("effective_date").isNull()
+    invalid_dates = (
+        F.col("effective_date").isNull()
+        | F.col("expiration_date").isNull()
+        | (F.col("effective_date") > F.col("expiration_date"))
+    )
 
-    effective_date_quarantine = (policies.where(invalid_effective_date)
-                                .withColumn("_dq_reason", F.lit("future_effective_date")))
+    effective_date_quarantine = (
+        policies.where(invalid_dates)
+        .withColumn(
+            "_dq_reason",
+            F.when(
+                F.col("effective_date").isNull(),
+                F.lit("invalid_or_future_effective_date")
+            )
+            .when(
+                F.col("expiration_date").isNull(),
+                F.lit("invalid_expiration_date")
+            )
+            .otherwise(F.lit("expiration_before_effective_date"))
+        )
+    )
+
+    policies = policies.where(~invalid_dates)
     
     # TODO 2: map status typos to canonical values
     
