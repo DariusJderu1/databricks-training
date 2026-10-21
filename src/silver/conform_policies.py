@@ -68,6 +68,19 @@ def build(spark=None):
         # for the TODO 2 trimming & uppercase
         .withColumn("status", F.upper(F.trim("status"))))
 
+    # Dealing with the annual_premium
+    invalid_annual_premium = (
+        (F.col("premium_valid") == False)
+        | F.col("annual_premium").isNull()
+    )
+
+    annual_premium_quarantine = (
+        policies.where(invalid_annual_premium)
+        .withColumn("_dq_reason", F.lit("invalid_annual_premium"))
+    )
+
+    policies = policies.where(~invalid_annual_premium).drop("premium_valid")
+
     # TODO 3
     invalid_dates = (
         F.col("effective_date").isNull()
@@ -184,6 +197,7 @@ def build(spark=None):
         status_quarantine
         .unionByName(customer_id_quarantine, allowMissingColumns=True)
         .unionByName(effective_date_quarantine, allowMissingColumns=True)
+        .unionByName(annual_premium_quarantine, allowMissingColumns=True)
     )
 
     (quarantine.write.mode("overwrite")
