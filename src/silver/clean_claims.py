@@ -56,7 +56,9 @@ def build(spark=None):
     claims = (
         claims
         .withColumn("loss_amount",
-            F.regexp_replace(F.col("loss_amount"), r"[$,]", "").cast("double"))
+            F.regexp_replace(F.col("loss_amount"), r"[$,]", "").try_cast("double"))
+        .withColumn("paid_amount",
+                    F.regexp_replace(F.col("paid_amount"), r"[$,]", "").try_cast("double"))
     )
 
     claims = (
