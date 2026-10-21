@@ -64,7 +64,8 @@ def build(spark=None):
         .withColumn("claim_date", F.coalesce(
             F.try_to_date("claim_date", "yyyy-MM-dd"),
             F.try_to_date("claim_date", "MM/dd/yyyy"),
-            F.try_to_date("claim_date", "dd-MMM-yyyy")
+            F.try_to_date("claim_date", "dd-MMM-yyyy"),
+            F.try_to_date("claim_date", "dd-MM-yyyy")
         ))
         .withColumn("claim_date_future_flag",
                     F.col("claim_date") > F.current_date())
@@ -80,7 +81,8 @@ def build(spark=None):
         .withColumn("loss_date", F.coalesce(
             F.try_to_date("loss_date", "yyyy-MM-dd"),
             F.try_to_date("loss_date", "MM/dd/yyyy"),
-            F.try_to_date("loss_date", "dd-MMM-yyyy")
+            F.try_to_date("loss_date", "dd-MMM-yyyy"),
+            F.try_to_date("loss_date", "dd-MM-yyyy")
         ))
         .withColumn("loss_date_future_flag",
                     F.col("loss_date") > F.current_date())
