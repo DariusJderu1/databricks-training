@@ -32,7 +32,7 @@ def build(spark=None):
     spark = spark or config.get_spark()
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('silver')}")
 
-    claims = spark.read.table(config.table("bronze", "claims"))
+    claims = spark.read.table(config.table("bronze", "claims")).dropDuplicates(["claim_id"])
     policies = spark.read.table(config.table("silver", "policies"))   # for orphan + sum_insured checks
     status = spark.read.table(config.table("bronze", "ref_claim_status")) 
 
