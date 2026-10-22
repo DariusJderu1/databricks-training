@@ -93,21 +93,17 @@ def build(spark=None):
         )
     )
 
-    clean_query = (
-        clean
+    (clean
         .withWatermark("event_ts", "2 hours")
         .dropDuplicates(["event_id", "event_ts"])
         .writeStream
         .option("checkpointLocation", config.checkpoint_path("silver_telematics"))
         .trigger(availableNow=True)
-        .toTable(config.table("silver", "telematics"))
-    )
+        .toTable(config.table("silver", "telematics")))
 
-    quarantine_query = (
-        quarantine
+    (quarantine
         .writeStream
         .option("checkpointLocation", config.checkpoint_path("silver_telematics_quarantine"))
         .trigger(availableNow=True)
-        .toTable(config.table("silver", "telematics_quarantine"))
-    )
+        .toTable(config.table("silver", "telematics_quarantine")))
     
