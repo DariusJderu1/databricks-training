@@ -25,4 +25,4 @@ SELECT
 FROM insurance.silver.claims cl
 JOIN insurance.gold.dim_date dd on cl.claim_date = dd.date
 JOIN insurance.gold.dim_policy dp on cl.policy_id = dp.policy_id
-JOIN insurance.bronze.ref_peril_codes rpc on cl.peril_code = rpc.peril_code;
+LEFT JOIN insurance.bronze.ref_peril_codes rpc on cl.peril_code = rpc.peril_code;
