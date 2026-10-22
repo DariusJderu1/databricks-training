@@ -46,10 +46,40 @@ def build(spark=None):
 
     # TODO 1: clean annual_premium (regexp_replace currency/commas -> cast double; drop/flag negatives).
     # numeric-as-string "$1,234.50" -> double, then negatives are invalid
-    policies = (policies
-        .withColumn("annual_premium",
-                    F.regexp_replace(F.col("annual_premium").cast("string"), r"[$,]", "").cast("double"))
+
+    # trims the annual_premium and removes the dollar sign at the beginning
+    premium_text = F.regexp_replace(
+        F.trim(F.col("annual_premium").cast("string")),
+        r"^\$", ""
+    )
+
+    # Matches a standard integer or a standard decimal number using the dot as the decimal separator
+    plain_number = r"^[0-9]+(?:\.[0-9]+)?$"
+    # Matches numbers formatted in a style that has comma separators for thousands, with an optional decimal point
+    thousands_number = r"^[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?$"
+    # Matches the numbers that uses a comma for the decimal separator, strictly limited to 1 or 2 decimal places
+    decimal_comma = r"^[0-9]+,[0-9]{1,2}$"
+
+    policies = (
+        policies
+        .withColumn(
+            "annual_premium",
+            F.when(
+                premium_text.rlike(decimal_comma),
+                F.regexp_replace(premium_text, ",", ".")
+            )
+            .when(
+                premium_text.rlike(plain_number)
+                | premium_text.rlike(thousands_number),
+                F.regexp_replace(premium_text, ",", "")
+            )
+            .otherwise(F.lit(None))
+            .cast("double")
+        )
         .withColumn("premium_valid", F.col("annual_premium") > 0)
+    )
+
+    policies = (policies
         # TODO 3: parse effective_date / expiration_date.
         .withColumn("effective_date", F.coalesce(
                                         F.try_to_date("effective_date", "yyyy-MM-dd"),
@@ -67,6 +97,7 @@ def build(spark=None):
                                         F.try_to_date("expiration_date", "dd-MMM-yyyy")))
         # for the TODO 2 trimming & uppercase
         .withColumn("status", F.upper(F.trim("status"))))
+
 
     # Dealing with the annual_premium
     invalid_annual_premium = (
