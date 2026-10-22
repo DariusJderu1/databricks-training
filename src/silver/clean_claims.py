@@ -101,14 +101,35 @@ def build(spark=None):
 
     claims = (
         claims
-        .withColumn("claim_status", F.trim("claim_status"))
+        .withColumn(
+            "claim_status",
+            F.regexp_replace(
+                F.upper(F.trim(F.col("claim_status"))),
+                r"\s+",
+                "_"
+            )
+        )
+    )
+
+    # There are some recurrent values in the table that clearly stand for some certain data
+    claims = (
+        claims
+        .withColumn(
+            "claim_status",
+            F.when(F.col("claim_status") == "OPN", "OPEN")
+                .when(F.col("claim_status") == "CLOSE", "CLOSED")
+                .when(F.col("claim_status") == "REVIEWING", "IN_REVIEW")
+                .otherwise(F.col("claim_status"))
+        )
     )
     
     claims = (
         claims
-        .join(F.broadcast(status), # uses the broadcast method for the small table (the result is a table with the columns from both sides)
-            claims.claim_status == status.status_code, "left") # uses a left join 
-        .withColumn("claim_status", F.col("status_code"))
+        .join(
+            F.broadcast(status), # uses the broadcast method for the small table (the result is a table with the columns from both sides)
+            claims.claim_status == status.status_code, 
+            "left" # uses a left join 
+        ) 
     )
     
     # this is the condition based on what I will check the rows that are invalid
@@ -120,8 +141,11 @@ def build(spark=None):
         .drop("status_code")
     )
 
-    claims = claims.where(~invalid_status).drop("status_code")
-
+    claims = (
+        claims.where(~invalid_status)
+        .withColumn("claim_status", F.col("status_code"))
+        .drop("status_code")
+    )
 
     # TODO 3: parse claim_date / loss_date.
 
