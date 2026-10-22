@@ -138,7 +138,17 @@ def build(spark=None):
     policies = policies.where(~invalid_dates)
     
     # TODO 2: map status typos to canonical values
-    
+    policies = (
+        policies
+        .withColumn(
+            "status",
+            F.when(F.col("status") == "LAPSE", "LAPSED")
+                .when(F.col("status").isin("PENING", "PEND"), "PENDING")
+                .when(F.col("status").isin("ACTV", "ACTIVEE"), "ACTIVE")
+                .otherwise(F.col("status"))
+        )
+    )
+
     # the invalid status condition
     invalid_status = (
         F.col("status").isNull()
