@@ -31,6 +31,6 @@ SELECT dd.year_month AS month_key, rpc.peril_name,
        claim_count / NULLIF(ap.active_policy_count, 0) AS frequency
 FROM insurance.gold.fact_claims fc
 JOIN insurance.gold.dim_date dd ON fc.date_key = dd.date_key
-LEFT JOIN insurance.bronze.ref_peril_codes rpc ON fc.peril_code = rpc.peril_code
+JOIN insurance.bronze.ref_peril_codes rpc ON fc.peril_code = rpc.peril_code
 JOIN active_policies ap ON dd.year_month = ap.year_month
 GROUP BY dd.year_month, rpc.peril_name, active_policy_count;
