@@ -23,14 +23,14 @@ active_policies AS (
     LEFT JOIN insurance.gold.dim_policy dp ON dp.effective_date <= m.last_of_month AND dp.expiration_date >= m.first_of_month
     GROUP BY m.year_month
 )
-SELECT d.year_month AS month_key, rp.peril_code,
+SELECT dd.year_month AS month_key, rpc.peril_code,
        COUNT(*) AS claim_count,
-       AVG(f.loss_amount) AS severity,  -- avg loss per claim
-       approx_count_distinct(f.policy_id) AS policies_with_claims,
-       AVG(CASE WHEN f.fraud_flag THEN 1 ELSE 0 END) AS fraud_rate, -- ~0.04 after silver
-       claim_count / NULLIF(active_policy_count, 0) AS frequency
-FROM insurance.gold.fact_claims f
-JOIN insurance.gold.dim_date d ON f.date_key = d.date_key
-JOIN insurance.bronze.ref_peril_codes rp ON f.peril_code = rp.peril_code
-JOIN active_policies ap ON d.year_month = ap.year_month
-GROUP BY d.year_month, rp.peril_code, active_policy_count;
+       AVG(fc.loss_amount) AS severity,  -- avg loss per claim
+       approx_count_distinct(fc.policy_id) AS policies_with_claims,
+       AVG(CASE WHEN fc.fraud_flag THEN 1 ELSE 0 END) AS fraud_rate, -- ~0.04 after silver
+       claim_count / NULLIF(ap.active_policy_count, 0) AS frequency
+FROM insurance.gold.fact_claims fc
+JOIN insurance.gold.dim_date dd ON fc.date_key = dd.date_key
+JOIN insurance.bronze.ref_peril_codes rpc ON fc.peril_code = rpc.peril_code
+JOIN active_policies ap ON dd.year_month = ap.year_month
+GROUP BY dd.year_month, rpc.peril_code, active_policy_count;
