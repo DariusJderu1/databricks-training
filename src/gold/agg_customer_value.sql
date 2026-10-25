@@ -18,12 +18,12 @@ CREATE OR REPLACE MATERIALIZED VIEW insurance.gold.agg_customer_value AS
 -- WHERE 1 = 0;
 
 SELECT dc.customer_id,
-       COUNT(dp.status) AS active_policies
+       SUM(CASE WHEN dp.status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_policies,
+       COALESCE(SUM(dp.annual_premium), 0) AS sum_annual_premiums
 
 FROM insurance.gold.dim_customer dc
 
 LEFT JOIN insurance.gold.dim_policy dp
     ON dc.customer_id = dp.customer_id 
-    AND dp.status = 'ACTIVE'
 
 GROUP BY dc.customer_id;
