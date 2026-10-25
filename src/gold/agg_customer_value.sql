@@ -19,11 +19,16 @@ CREATE OR REPLACE MATERIALIZED VIEW insurance.gold.agg_customer_value AS
 
 SELECT dc.customer_id,
        SUM(CASE WHEN dp.status = 'ACTIVE' THEN 1 ELSE 0 END) AS active_policies,
-       COALESCE(SUM(dp.annual_premium), 0) AS sum_annual_premiums
+       COALESCE(SUM(dp.annual_premium), 0) AS sum_annual_premiums, 
+       COUNT(fc.claim_id) AS claim_count
 
 FROM insurance.gold.dim_customer dc
 
 LEFT JOIN insurance.gold.dim_policy dp
     ON dc.customer_id = dp.customer_id 
+
+LEFT JOIN insurance.gold.fact_claims fc 
+    ON dc.customer_id = fc.customer_id
+    AND dp.policy_id = fc.policy_id
 
 GROUP BY dc.customer_id;
