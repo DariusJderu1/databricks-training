@@ -30,3 +30,6 @@ data/
 # Secrets
 .env
 *.local
+
+# Random
+AGENTS.md
