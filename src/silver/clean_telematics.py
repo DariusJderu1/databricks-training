@@ -93,7 +93,7 @@ def build(spark=None):
         )
     )
 
-    (clean
+    clean_query = (clean
         .withWatermark("event_ts", "2 hours")
         .dropDuplicates(["event_id", "event_ts"])
         .writeStream
@@ -101,9 +101,39 @@ def build(spark=None):
         .trigger(availableNow=True)
         .toTable(config.table("silver", "telematics")))
 
-    (quarantine
+    quarantine_query = (quarantine
         .writeStream
         .option("checkpointLocation", config.checkpoint_path("silver_telematics_quarantine"))
         .trigger(availableNow=True)
         .toTable(config.table("silver", "telematics_quarantine")))
+
+
+    # this activates the streams and waits for each and one of them to finish
+    clean_query.awaitTermination()
+    quarantine_query.awaitTermination()
+
+
+    passed_counts = (
+        spark.read.table(config.table("silver", "telematics"))
+        .agg(F.count("*").alias("passed"))
+    )
+
+    quarantine_counts = (
+        spark.read.table(config.table("silver", "telematics_quarantine"))
+        .agg(F.count("*").alias("quarantined"))
+    )
+
+    scorecard = (
+        passed_counts
+        .crossJoin(quarantine_counts)
+        .withColumn("table_name", F.lit(config.table("silver", "telematics")))
+        .withColumn("run_ts", F.current_timestamp())
+    )
+
+    spark.sql(
+        f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('ops')}"
+    )
+
+    (scorecard.write.mode("append")
+        .saveAsTable(config.table("ops", "dq_scorecard")))
     
