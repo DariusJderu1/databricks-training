@@ -183,5 +183,23 @@ def build(spark=None):
         .saveAsTable(config.table("silver", "payments_quarantine")))
 
 
+    # Record counts for the DQ scorecard.
+    passed_counts = clean.agg(F.count("*").alias("passed"))
+    quarantine_counts = quarantine.agg(F.count("*").alias("quarantined"))
+
+    scorecard = (
+        passed_counts
+        .crossJoin(quarantine_counts)
+        .withColumn("table_name", F.lit(config.table("silver", "payments")))
+        .withColumn("run_ts", F.current_timestamp())
+    )
+
+    spark.sql(
+        f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('ops')}"
+    )
+
+    (scorecard.write.mode("append")
+        .saveAsTable(config.table("ops", "dq_scorecard")))
+
 if __name__ == "__main__":
     build()
