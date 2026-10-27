@@ -93,3 +93,20 @@ def bronze_payments():
             "current_timestamp() AS _ingest_ts",
         )
     )
+
+
+@dlt.table(name="bronze_agents", comment="Raw agents via Auto Loader")
+def bronze_agents():
+    return (
+        spark.readStream.format("cloudFiles")
+        .option("cloudFiles.format", "csv")
+        .option("header", "true")
+        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
+        .option("rescuedDataColumn", "_rescued_data")
+        .load(f"{LANDING}/agents")
+        .selectExpr(
+            "*",
+            "_metadata.file_path AS _source_file",
+            "current_timestamp() AS _ingest_ts",
+        )
+    )
