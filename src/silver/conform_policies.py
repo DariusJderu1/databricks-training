@@ -46,10 +46,40 @@ def build(spark=None):
 
     # TODO 1: clean annual_premium (regexp_replace currency/commas -> cast double; drop/flag negatives).
     # numeric-as-string "$1,234.50" -> double, then negatives are invalid
-    policies = (policies
-        .withColumn("annual_premium",
-                    F.regexp_replace(F.col("annual_premium").cast("string"), r"[$,]", "").cast("double"))
+
+    # trims the annual_premium and removes the dollar sign at the beginning
+    premium_text = F.regexp_replace(
+        F.trim(F.col("annual_premium").cast("string")),
+        r"^\$", ""
+    )
+
+    # Matches a standard integer or a standard decimal number using the dot as the decimal separator
+    plain_number = r"^[0-9]+(?:\.[0-9]+)?$"
+    # Matches numbers formatted in a style that has comma separators for thousands, with an optional decimal point
+    thousands_number = r"^[0-9]{1,3}(?:,[0-9]{3})+(?:\.[0-9]+)?$"
+    # Matches the numbers that uses a comma for the decimal separator, strictly limited to 1 or 2 decimal places
+    decimal_comma = r"^[0-9]+,[0-9]{1,2}$"
+
+    policies = (
+        policies
+        .withColumn(
+            "annual_premium",
+            F.when(
+                premium_text.rlike(decimal_comma),
+                F.regexp_replace(premium_text, ",", ".")
+            )
+            .when(
+                premium_text.rlike(plain_number)
+                | premium_text.rlike(thousands_number),
+                F.regexp_replace(premium_text, ",", "")
+            )
+            .otherwise(F.lit(None))
+            .cast("double")
+        )
         .withColumn("premium_valid", F.col("annual_premium") > 0)
+    )
+
+    policies = (policies
         # TODO 3: parse effective_date / expiration_date.
         .withColumn("effective_date", F.coalesce(
                                         F.try_to_date("effective_date", "yyyy-MM-dd"),
@@ -68,14 +98,57 @@ def build(spark=None):
         # for the TODO 2 trimming & uppercase
         .withColumn("status", F.upper(F.trim("status"))))
 
-    # TODO 3
-    invalid_effective_date = F.col("effective_date").isNull()
 
-    effective_date_quarantine = (policies.where(invalid_effective_date)
-                                .withColumn("_dq_reason", F.lit("future_effective_date")))
+    # Dealing with the annual_premium
+    invalid_annual_premium = (
+        (F.col("premium_valid") == False)
+        | F.col("annual_premium").isNull()
+    )
+
+    annual_premium_quarantine = (
+        policies.where(invalid_annual_premium)
+        .withColumn("_dq_reason", F.lit("invalid_annual_premium"))
+    )
+
+    policies = policies.where(~invalid_annual_premium).drop("premium_valid")
+
+    # TODO 3
+    invalid_dates = (
+        F.col("effective_date").isNull()
+        | F.col("expiration_date").isNull()
+        | (F.col("effective_date") > F.col("expiration_date"))
+    )
+
+    effective_date_quarantine = (
+        policies.where(invalid_dates)
+        .withColumn(
+            "_dq_reason",
+            F.when(
+                F.col("effective_date").isNull(),
+                F.lit("invalid_or_future_effective_date")
+            )
+            .when(
+                F.col("expiration_date").isNull(),
+                F.lit("invalid_expiration_date")
+            )
+            .otherwise(F.lit("expiration_before_effective_date"))
+        )
+    )
+
+    policies = policies.where(~invalid_dates)
     
     # TODO 2: map status typos to canonical values
-    
+    policies = (
+        policies
+        .withColumn(
+            "status",
+            F.when(F.col("status") == "LAPSE", "LAPSED")
+                .when(F.col("status").isin("PENING", "PEND"), "PENDING")
+                .when(F.col("status").isin("ACTV", "ACTIVEE"), "ACTIVE")
+                .otherwise(F.col("status"))
+        )
+    )
+
     # the invalid status condition
     invalid_status = (
         F.col("status").isNull()
@@ -165,10 +238,30 @@ def build(spark=None):
         status_quarantine
         .unionByName(customer_id_quarantine, allowMissingColumns=True)
         .unionByName(effective_date_quarantine, allowMissingColumns=True)
+        .unionByName(annual_premium_quarantine, allowMissingColumns=True)
     )
 
     (quarantine.write.mode("overwrite")
             .saveAsTable(config.table("silver", "policies_quarantine")))
+
+
+    # Record counts for the DQ scorecard.
+    passed_counts = policies.agg(F.count("*").alias("passed"))
+    quarantine_counts = quarantine.agg(F.count("*").alias("quarantined"))
+
+    scorecard = (
+        passed_counts
+        .crossJoin(quarantine_counts)
+        .withColumn("table_name", F.lit(config.table("silver", "policies")))
+        .withColumn("run_ts", F.current_timestamp())
+    )
+
+    spark.sql(
+        f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('ops')}"
+    )
+
+    (scorecard.write.mode("append")
+        .saveAsTable(config.table("ops", "dq_scorecard")))
 
 if __name__ == "__main__":
     build()

@@ -31,4 +31,5 @@ data/
 .env
 *.local
 
+# Random
 AGENTS.md
