@@ -15,12 +15,14 @@ LANDING = "/Volumes/insurance/landing/raw"
 
 # ----------------------------- BRONZE (streaming ingest) ----------------------------- #
 
+# the name specifies the name of the table databricks will create. - the spark.readStream returns a Streaming DataFrame. A streaming table is a delta table with managed streaming processing and checkpoint state. Designed for incremental streaming processing like for bronze ingestion. SQL equivalent is STREAMING TABLE (like at the second run it will continue after the checkpoint with the processing)
+# Databricks automatically creates and manages the checkpoints for the schemaEvolution and already processed files internally - I don't have access to a checkpoint folder
+# The trigger(availableNow=True) is replaced by the pipeline processing logic
+
+
 # TODO: add bronze_telematics (json), bronze_policies (json, multiLine), bronze_claims,
 #       bronze_payments — each as a streaming table from cloudFiles.
 
-# the name specifies the name of the table databricks will create. - the spark.readStream returns a Streaming DataFrame. A streaming table is a delta table with managed streaming processing and checkpoint state. Designed for incremental streaming processing like for bronze ingestion
-# Databricks automatically creates and manages the checkpoints for the schemaEvolution and already processed files internally - I don't have access to a checkpoint folder
-# The trigger(availableNow=True) is replaced by the pipeline processing logic
 @dlt.table(name="bronze_customers", comment="Raw customers via Auto Loader")
 def bronze_customers():
     return (
