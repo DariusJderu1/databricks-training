@@ -122,17 +122,32 @@ def prepare_silver_customers():
 
     return clean
 
-@dlt.table(name="silver_customers")
-def silver_customers():
-    return (
-        dlt.read_stream("prepare_silver_customer")
-        .where(F.col("_dq_reason").isNull())
-        .drop("_dq_reason")
-    )
-
+# Quarantine for customers
 @dlt.table(name="silver_customers_quarantine")
 def silver_customers_quarantine():
     return (
         dlt.read_stream("prepare_silver_customer")
         .where(F.col("_dq_reason").isNotNull())
     )
+
+# View for the clean customers - keeps the multiple possible versions of rows with the same customer_id
+# and drops the rows with the dq column not null
+@dlt.view(name="valid_silver_customers")
+def valid_silver_customers():
+    return (
+        dlt.read_stream("prepare_silver_customer")
+        .where(F.col("_dq_reason").isNull())
+        .drop("_dq_reason")
+    )
+
+# Creates the streaming table for the clean customers - no data in it
+dlt.create_streaming_table(name="silver_customers")
+
+dlt.apply_changes(
+    target="silver_customers", # apply the changes in the silver_customers table
+    source="valid_silver_customers", # take the new data from the valid_... talbe
+    keys=["customer_id"], # you identify a customer after that column. A new row with an existing Id is treated as an updated of the same customer
+    sequence_by=F.col("updated_at"), # Use the value from the updated_at column to determine the order of the versions of the rows
+    stored_as_scd_type=1 # this expresses the use of SCD Type 1: When a client changes, update the existing row, don't keep the older versions in the table
+)
+
