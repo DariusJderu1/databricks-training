@@ -9,10 +9,7 @@ CREATE SCHEMA IF NOT EXISTS insurance.gold;
 CREATE OR REPLACE TABLE insurance.gold.dim_policy AS
 SELECT
   p.policy_id, p.customer_id, p.agent_id, p.product_line, p.status,
-  p.effective_date, p.expiration_date, p.annual_premium, p.sum_insured, p.payment_frequency,
-  count(pc.policy_id) AS coverage_count, sum(pc.limit) AS total_limit
+  p.effective_date, p.expiration_date, p.annual_premium, p.sum_insured, p.payment_frequency
   -- TODO: LEFT JOIN a coverage rollup from silver.policy_coverages
   --       (count(*) AS coverage_count, sum(limit) AS total_limit) grouped by policy_id
-FROM insurance.silver.policies p
-LEFT JOIN insurance.silver.policy_coverages pc on p.policy_id = pc.policy_id
-GROUP BY p.policy_id, p.customer_id, p.agent_id, p.product_line, p.status, p.effective_date, p.expiration_date, p.annual_premium, p.sum_insured, p.payment_frequency;
+FROM insurance.silver.policies p;

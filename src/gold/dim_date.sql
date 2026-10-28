@@ -37,4 +37,4 @@ SELECT
 FROM calendar;
 
 -- quick sanity check
-SELECT count(*) AS days, min(date) AS from_date, max(date) AS to_date FROM insurance.gold.dim_date;
+-- SELECT count(*) AS days, min(date) AS from_date, max(date) AS to_date FROM insurance.gold.dim_date;
