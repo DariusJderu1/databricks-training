@@ -39,7 +39,11 @@ def prepare_silver_customers():
             .withColumn("email", F.lower(F.trim("email")))
             .withColumn("phone", F.lower(F.trim("phone")))
             .withColumn("state_raw", F.upper(F.trim("state")))
+            .withColumn("updated_at", F.col("updated_at").try_cast("timestamp"))
     )
+
+    # Updated at 
+    invalid_updated_at = F.col("updated_at").isNull()
 
     # State
     states = states.select("state_code")
@@ -72,15 +76,15 @@ def prepare_silver_customers():
 
 
     # Deduplication
-    clean = clean.dropDuplicates() # dedupes all the rows, based on each of the columns
+    # clean = clean.dropDuplicates() # dedupes all the rows, based on each of the columns
 
-    w = (Window.partitionBy("customer_id") # treat all rows with the same customer ID as one group
-            .orderBy(F.col("updated_at").desc_nulls_last())) # inside each group, put the newest row first based on that updated_at
+    # w = (Window.partitionBy("customer_id") # treat all rows with the same customer ID as one group
+    #         .orderBy(F.col("updated_at").desc_nulls_last())) # inside each group, put the newest row first based on that updated_at
 
-    clean = (clean
-                .withColumn("_rn", F.row_number().over(w)) # adds the _rn column that represents the row number over the window
-                .where("_rn = 1") # where the rows have the _rn column 1 (like it keeps only the rows that have that column 1.)
-                .drop("_rn")) # deletes the column _rn
+    # clean = (clean
+    #             .withColumn("_rn", F.row_number().over(w)) # adds the _rn column that represents the row number over the window
+    #             .where("_rn = 1") # where the rows have the _rn column 1 (like it keeps only the rows that have that column 1.)
+    #             .drop("_rn")) # deletes the column _rn
 
 
     # Contact
@@ -88,6 +92,10 @@ def prepare_silver_customers():
         clean
         .withColumn("_dq_reason",
             F.when(
+                invalid_updated_at,
+                F.lit("invalid_updated_at")
+            )
+            .when(
                 invalid_dob,
                 F.lit("invalid_date_of_birth")
             )
@@ -115,95 +123,16 @@ def prepare_silver_customers():
     return clean
 
 @dlt.table(name="silver_customers")
-@dlt.expect_or_drop("valid_customer_id", "customer_id IS NOT NULL")
-@dlt.expect("has_email", "email IS NOT NULL")
 def silver_customers():
-    customers = dlt.read_stream("bronze_customers") # a streaming data frame - it only processes the new data using the checkpoints
-
-    # Cleaning
-    clean = (
-        customers
-            .withColumn("city", F.initcap(F.trim("city"))) 
-            .withColumn("email", F.lower(F.trim("email")))
-            .withColumn("phone", F.lower(F.trim("phone")))
-            .withColumn("state_raw", F.upper(F.trim("state")))
+    return (
+        dlt.read_stream("prepare_silver_customer")
+        .where(F.col("_dq_reason").isNull())
+        .drop("_dq_reason")
     )
 
-    # State
-    states = states.select("state_code")
-    
-    clean = (clean.join(F.broadcast(states), # uses the broadcast method for the small table (the result is a table with the columns from both sides)
-                        clean.state_raw == states.state_code, "left") # uses a left join - keeps the rows from clean
-                  .withColumn("state", F.col("state_code")))
-    
-    invalid_state = F.col("state_code").isNull()
-
-
-    # Dates
-    clean = (
-        clean
-        .withColumn("date_of_birth", 
-            F.coalesce( 
-                    F.try_to_date("date_of_birth", "yyyy-MM-dd"),
-                    F.try_to_date("date_of_birth", "MM/dd/yyyy"),
-                    F.try_to_date("date_of_birth", "dd-MMM-yyyy"))
-            )
-            .withColumn("dob_future_flag", F.col("date_of_birth") > F.current_date()) # creates a new boolean column, if the date is in the future
-            .withColumn("date_of_birth", F.when( # if
-                F.col("dob_future_flag"), # this is true
-                F.lit(None).cast("date") # column becomes null
-            ).otherwise(F.col("date_of_birth"))) # else keep the value from date_of_birth
-            .drop("dob_future_flag")
-    ) 
-
-    invalid_dob = F.col("date_of_birth").isNull()
-
-    dob_quarantine = (clean.where(invalid_dob)
-                            .withColumn("_dq_reason", F.lit("invalid_date_of_birth")))
-    
-    clean = clean.where(~invalid_dob)
-
-
-    state_quarantine = (clean.where(invalid_state)
-                        .withColumn("_dq_reason", F.lit("invalid_state"))
-                        .drop("state_code", "state"))
-    
-    # keep only rows with a valid state
-    clean = (clean.where(~invalid_state)
-            .drop("state_code", "state_raw"))
-
-
-    # Deduplication
-    clean = clean.dropDuplicates() # dedupes all the rows, based on each of the columns
-
-    w = (Window.partitionBy("customer_id") # treat all rows with the same customer ID as one group
-            .orderBy(F.col("updated_at").desc_nulls_last())) # inside each group, put the newest row first based on that updated_at
-
-    clean = (clean
-                .withColumn("_rn", F.row_number().over(w)) # adds the _rn column that represents the row number over the window
-                .where("_rn = 1") # where the rows have the _rn column 1 (like it keeps only the rows that have that column 1.)
-                .drop("_rn")) # deletes the column _rn
-
-
-    # Contact
-    invalid = (
-        F.col("email").isNull()
-        | F.col("phone").isNull()
+@dlt.table(name="silver_customers_quarantine")
+def silver_customers_quarantine():
+    return (
+        dlt.read_stream("prepare_silver_customer")
+        .where(F.col("_dq_reason").isNotNull())
     )
-
-    # create a dataframe for the quarantine table
-    contact_quarantine = (
-        clean
-        .where(invalid) # all the invalid rows from the clean
-        .withColumn( 
-            "_dq_reason", # edit the column 
-            F.when(F.col("email").isNull() & F.col("phone").isNull(), F.lit("missing_phone_email"))
-            .when(F.col("email").isNull(), F.lit("missing_email")) # if the column is null insert in the _dq_reason the string with explanation
-            .when(F.col("phone").isNull(), F.lit("missing_phone"))
-        )
-    )
-
-    # df with all the clean rows
-    clean = clean.where(~invalid)
-
-    return clean
