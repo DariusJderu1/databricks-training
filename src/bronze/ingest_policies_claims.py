@@ -32,17 +32,7 @@ def ingest_policies(spark=None):
     # TODO: read JSON with multiLine=true (read_files(..., format=>'json', multiLine=>true)
     #       OR Auto Loader cloudFiles json), add _source_file + _ingest_ts, write to `target`.
     #       Keep `coverages` nested — do NOT explode here (that's silver/conform_policies).
-    # raise NotImplementedError("Implement policies JSON ingestion (multiLine) — see studybook M2.")
-
-    # CREATE OR REPLACE TABLE policies AS 
-    # SELECT *, _metadata.file_path AS _source_file, current_timestamp() AS _ingest_ts
-    # FROM read_files("/Volumes/insurance/landing/raw/policies", format => "json", multiLine => true);
-
-    spark.sql(f"""
-            CREATE OR REPLACE TABLE {target} AS 
-            SELECT *, _metadata.file_path AS _source_file, current_timestamp() AS _ingest_ts 
-            FROM read_files('{src_path}', format => "json", multiLine => true);
-    """)
+    raise NotImplementedError("Implement policies JSON ingestion (multiLine) — see studybook M2.")
 
 
 def ingest_claims(spark=None):
@@ -50,25 +40,9 @@ def ingest_claims(spark=None):
     spark.sql(f"CREATE SCHEMA IF NOT EXISTS {config.CATALOG}.{config.schema('bronze')}")
     target = config.table("bronze", "claims")
     src_path = config.volume_path("claims")
-
     # TODO: read newline-delimited JSON (Auto Loader cloudFiles json or read_files),
     #       add ingestion metadata, write to `target`.
-    # raise NotImplementedError("Implement claims JSON ingestion — see studybook M2.")
-
-    checkpoint = config.checkpoint_path("bronze_claims")
-
-    stream = (spark.readStream.format("cloudFiles") 
-        .option("cloudFiles.format", "json")
-        .option("cloudFiles.schemaLocation", checkpoint)
-        .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
-        .option("rescuedDataColumn", "_rescued_data")
-        .load(src_path)
-        .selectExpr("*", "_metadata.file_path AS _source_file", "current_timestamp() AS _ingest_ts"))  
-      
-    (stream.writeStream
-        .option("checkpointLocation", checkpoint)
-        .trigger(availableNow=True)
-        .toTable(target))
+    raise NotImplementedError("Implement claims JSON ingestion — see studybook M2.")
 
 
 if __name__ == "__main__":

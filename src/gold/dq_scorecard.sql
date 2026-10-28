@@ -12,20 +12,6 @@ CREATE OR REPLACE VIEW insurance.gold.v_dq_scorecard AS
 -- TODO: SELECT table_name, passed, quarantined, quarantined/(passed+quarantined) AS quarantine_rate,
 --        run_ts, ranked to the latest run per table (window: row_number() over (partition by table_name
 --        order by run_ts desc) = 1).
-
--- SELECT CAST(NULL AS STRING) AS table_name, CAST(NULL AS BIGINT) AS passed,
---        CAST(NULL AS BIGINT) AS quarantined, CAST(NULL AS TIMESTAMP) AS run_ts
--- WHERE 1 = 0;
-
-SELECT table_name, passed, quarantined, quarantine_rate, run_ts
-FROM(
-    SELECT table_name, passed, quarantined,
-           quarantined / NULLIF((quarantined + passed), 0) AS quarantine_rate,
-           run_ts,
-           ROW_NUMBER() OVER (
-               PARTITION BY table_name
-               ORDER BY run_ts DESC
-           ) AS row_number
-    FROM insurance.ops.dq_scorecard
-) 
-WHERE row_number = 1;
+SELECT CAST(NULL AS STRING) AS table_name, CAST(NULL AS BIGINT) AS passed,
+       CAST(NULL AS BIGINT) AS quarantined, CAST(NULL AS TIMESTAMP) AS run_ts
+WHERE 1 = 0;
