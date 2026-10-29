@@ -17,10 +17,13 @@ LANDING = "/Volumes/insurance/landing/raw"
 
 # ----------------------------- SILVER (clean + expectations) ------------------------- #
 
-
+# Notes to muself
 # Databricks handles the table creation, writing data into the table,
 # checkpoints for streaming, warn drop fail 
 # Manually manage: cleaning data, data quality rules, dedup, quarantine
+
+# dlt.read_stream(...) treats the source as an event stream: gives new rows that have arrived since the last checkpoint
+# dlt.read(...) gives the current contents of the dataset as a table
 
 # TODO: silver_policies (+ explode coverages), silver_claims (normalize fraud_flag),
 #       silver_agents (SCD2 — apply_changes), with expectations per the data dictionary.
@@ -295,7 +298,7 @@ def prepare_silver_policies():
     return clean
 
 
-@dlt.table(name="silver_policies_quarantine")
+@dlt.table(name="silver_policies_quarantine", comment="Adds the impure data in quarantine table")
 def silver_policies_quarantine():
     return (
         dlt.read_stream("prepare_silver_policies")
@@ -303,7 +306,7 @@ def silver_policies_quarantine():
     )
 
 
-@dlt.view(name="valid_silver_policies")
+@dlt.view(name="valid_silver_policies", comment="View for polices without the impure data")
 def valid_silver_policies():
     return (
         dlt.read_stream("prepare_silver_policies")
@@ -312,13 +315,57 @@ def valid_silver_policies():
     )
 
 
-dlt.create_streaming_table(name="deduplicated_silver_policies")
+@dlt.view(name="valid_policy_records", comment="View for policies without coverages")
+def valid_policy_records():
+    return (
+        dlt.read_stream("valid_silver_policies")
+        .drop("coverages")
+    )
+
+
+# Creates the the final table for policies
+dlt.create_streaming_table(name="silver_policies")
+
+
+# Adds the data in the table from the view and applies SCD1
+dlt.apply_changes(
+    target="silver_policies",
+    source="valid_policy_records",
+    keys=["policy_id"],
+    sequence_by=F.col("_ingest_ts"),
+    stored_as_scd_type=1
+)
+
+
+@dlt.view(name="valid_policy_coverages")
+def valid_policy_coverages():
+    return (
+        dlt.read_stream("valid_silver_policies")
+        .select(
+            "policy_id",
+            "product_line",
+            "_ingest_ts",
+            F.explode("coverages").alias("coverage")
+        )
+        .select(
+            "policy_id",
+            "product_line",
+            "_ingest_ts",
+            F.col("coverage.coverage_code").alias("coverage_code"),
+            F.col("coverage.limit").alias("limit"),
+            F.col("coverage.deductible").alias("deductible"),
+            F.col("coverage.peril_code").alias("peril_code")
+        )
+    )
+
+
+dlt.create_streaming_table(name="silver_policy_coverages")
 
 
 dlt.apply_changes(
-    target="deduplicated_silver_policies",
-    source="valid_silver_policies",
-    keys=["policy_id"],
+    target="silver_policy_coverages",
+    source="valid_policy_coverages",
+    keys=["policy_id", "coverage_code"],
     sequence_by=F.col("_ingest_ts"),
     stored_as_scd_type=1
 )
