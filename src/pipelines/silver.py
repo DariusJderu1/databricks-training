@@ -289,3 +289,10 @@ def prepare_silver_policies():
     clean = clean.drop("premium_valid", "_customer_exists")
 
     return clean
+
+@dlt.table(name="silver_policies_quarantine")
+def silver_policies_quarantine():
+    return (
+        dlt.read_stream("prepare_silver_policies")
+        .where(F.col("_dq_reason").isNotNull())
+    )
