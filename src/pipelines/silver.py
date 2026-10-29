@@ -369,3 +369,193 @@ dlt.apply_changes(
     sequence_by=F.col("_ingest_ts"),
     stored_as_scd_type=1
 )
+
+
+####################################################################################
+
+# CLAIMS
+
+@dlt.view(name="prepare_silver_claims", comment="Cleans claims and assigns validation reasons before splitting valid and quarantined records")
+def prepare_silver_claims():
+    TRUE_TOKENS = ["true", "y", "yes", "1"]
+
+    claims = (
+        dlt.read_stream("bronze_claims")
+        .dropDuplicates(["claim_id"])
+    )
+
+    policies = dlt.read("silver_policies")
+    status = dlt.read(config.table("bronze", "ref_claim_status"))
+
+    claims = (
+        claims
+        .withColumn("fraud_flag", F.when(
+                                    F.lower(F.trim("fraud_flag")).isin(TRUE_TOKENS), 
+                                    F.lit(True))
+                                    .otherwise(F.lit(False)))
+    )
+
+    claims = (
+        claims
+        .withColumn("loss_amount",
+            F.regexp_replace(F.col("loss_amount"), r"[$,]", "").try_cast("double"))
+        .withColumn("paid_amount",
+                    F.regexp_replace(F.col("paid_amount"), r"[$,]", "").try_cast("double"))
+    )
+
+    claims = (
+        claims
+        .withColumn("claim_date", F.coalesce(
+            F.try_to_date("claim_date", "yyyy-MM-dd"),
+            F.try_to_date("claim_date", "MM/dd/yyyy"),
+            F.try_to_date("claim_date", "dd-MMM-yyyy"),
+            F.try_to_date("claim_date", "dd-MM-yyyy")
+        ))
+        .withColumn("claim_date_future_flag",
+                    F.col("claim_date") > F.current_date())
+        .withColumn("claim_date", F.when(
+            F.col("claim_date_future_flag"),
+            F.lit(None).cast("date")
+        ).otherwise(F.col("claim_date")))
+        .drop("claim_date_future_flag")
+    )
+
+    claims = (
+        claims
+        .withColumn("loss_date", F.coalesce(
+            F.try_to_date("loss_date", "yyyy-MM-dd"),
+            F.try_to_date("loss_date", "MM/dd/yyyy"),
+            F.try_to_date("loss_date", "dd-MMM-yyyy"),
+            F.try_to_date("loss_date", "dd-MM-yyyy")
+        ))
+        .withColumn("loss_date_future_flag",
+                    F.col("loss_date") > F.current_date())
+        .withColumn("loss_date", F.when(
+            F.col("loss_date_future_flag"),
+            F.lit(None).cast("date")
+        ).otherwise(F.col("loss_date")))
+        .drop("loss_date_future_flag")
+    )
+
+    status = status.select("status_code")
+
+    claims = (
+        claims
+        .withColumn(
+            "claim_status",
+            F.regexp_replace(
+                F.upper(F.trim(F.col("claim_status"))),
+                r"\s+",
+                "_"
+            )
+        )
+    )
+
+    claims = (
+        claims
+        .withColumn(
+            "claim_status",
+            F.when(F.col("claim_status") == "OPN", "OPEN")
+                .when(F.col("claim_status") == "CLOSE", "CLOSED")
+                .when(F.col("claim_status") == "REVIEWING", "IN_REVIEW")
+                .otherwise(F.col("claim_status"))
+        )
+    )
+
+    claims = (
+        claims
+        .join(
+            F.broadcast(status), # uses the broadcast method for the small table (the result is a table with the columns from both sides)
+            claims.claim_status == status.status_code, 
+            "left" # uses a left join 
+        ) 
+    )
+
+    invalid_status =  F.col("status_code").isNull()
+
+    invalid_claim_date = F.col("claim_date").isNull()
+    invalid_loss_date = F.col("loss_date").isNull()
+    invalid_dates = invalid_claim_date | invalid_loss_date
+
+    policy_keys = (
+        policies
+        .select("policy_id", "sum_insured")
+        .distinct()
+        .withColumn("_policy_exists", F.lit(True))
+    )
+
+    claims = claims.join(
+        policy_keys,
+        on="policy_id",
+        how="left"
+    )
+
+    invalid_policy_id = F.col("_policy_exists").isNull()
+
+    invalid_amount = (
+        F.col("loss_amount").isNull()
+        | F.col("sum_insured").isNull()
+        | (F.col("loss_amount") > F.col("sum_insured"))
+    )
+
+
+    clean = (
+        claims
+        .withColumn("_dq_reason",
+            F.when(
+                invalid_status,
+                F.lit("invalid_claim_status")
+            )
+            .when(
+                invalid_dates,
+                F.lit("invalid_claim_or_loss_date")
+            )
+            .when(
+                invalid_policy_id,
+                F.lit("invalid_policy_id")
+            )
+            .when(
+                invalid_amount,
+                F.when(
+                    F.col("loss_amount").isNull()
+                    | F.col("sum_insured").isNull(),
+                    F.lit("missing_or_invalid_amount")
+                )
+                .otherwise(F.lit("loss_exceeds_sum_insured"))
+            )
+            .otherwise(F.lit(None).cast("string")))
+    )
+
+    clean = clean.drop("sum_insured", "_policy_exists", "status_code")
+
+    return clean
+    
+
+@dlt.table(name="silver_claims_quarantine")
+def silver_claims_quarantine():
+    return (
+        dlt.read_stream("prepare_silver_claims")
+        .where(F.col("_dq_reason").isNotNull())
+    )
+
+
+@dlt.view(name="valid_silver_claims")
+def valid_silver_claims():
+    return (
+        dlt.read_stream("prepare_silver_claims")
+        .where(F.col("_dq_reason").isNull())
+        .drop("_dq_reason")
+    )
+
+
+dlt.create_streaming_table(name="silver_claims")
+
+
+# Add the changes in the streaming table
+dlt.apply_changes(
+    target="silver_claims",
+    source="valid_silver_claims", 
+    keys=["claim_id"], 
+    sequence_by=F.col("_ingest_ts"),
+    stored_as_scd_type=1  
+)
