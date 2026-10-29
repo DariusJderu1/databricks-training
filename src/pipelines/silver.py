@@ -125,6 +125,7 @@ def prepare_silver_customers():
 
     return clean
 
+
 # Quarantine for customers
 @dlt.table(name="silver_customers_quarantine")
 def silver_customers_quarantine():
@@ -132,6 +133,7 @@ def silver_customers_quarantine():
         dlt.read_stream("prepare_silver_customer")
         .where(F.col("_dq_reason").isNotNull())
     )
+
 
 # View for the clean customers - keeps the multiple possible versions of rows with the same customer_id
 # and drops the rows with the dq column not null
@@ -143,8 +145,10 @@ def valid_silver_customers():
         .drop("_dq_reason")
     )
 
+
 # Creates the streaming table for the clean customers - no data in it
 dlt.create_streaming_table(name="silver_customers")
+
 
 # Add the changes in the streaming table
 dlt.apply_changes(
@@ -306,3 +310,15 @@ def valid_silver_policies():
         .where(F.col("_dq_reason").isNull())
         .drop("_dq_reason")
     )
+
+
+dlt.create_streaming_table(name="deduplicated_silver_policies")
+
+
+dlt.apply_changes(
+    target="deduplicated_silver_policies",
+    source="valid_silver_policies",
+    keys=["policy_id"],
+    sequence_by=F.col("_ingest_ts"),
+    stored_as_scd_type=1
+)
