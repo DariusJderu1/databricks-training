@@ -730,3 +730,12 @@ def prepare_silver_payments():
     )
 
     return clean
+
+
+# Quarantine for payments
+@dlt.table(name="silver_payments_quarantine")
+def silver_payments_quarantine():
+    return (
+        dlt.read_stream("prepare_silver_payments")
+        .where(F.col("_dq_reason").isNotNull())
+    )
