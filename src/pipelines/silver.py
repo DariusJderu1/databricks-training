@@ -290,9 +290,19 @@ def prepare_silver_policies():
 
     return clean
 
+
 @dlt.table(name="silver_policies_quarantine")
 def silver_policies_quarantine():
     return (
         dlt.read_stream("prepare_silver_policies")
         .where(F.col("_dq_reason").isNotNull())
+    )
+
+
+@dlt.view(name="valid_silver_policies")
+def valid_silver_policies():
+    return (
+        dlt.read_stream("prepare_silver_policies")
+        .where(F.col("_dq_reason").isNull())
+        .drop("_dq_reason")
     )
