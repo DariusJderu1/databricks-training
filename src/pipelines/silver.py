@@ -739,3 +739,12 @@ def silver_payments_quarantine():
         dlt.read_stream("prepare_silver_payments")
         .where(F.col("_dq_reason").isNotNull())
     )
+
+
+@dlt.table(name="silver_payments")
+def silver_payments():
+    return (
+        dlt.read_stream("prepare_silver_payments")
+        .where(F.col("_dq_reason").isNull())
+        .drop("_dq_reason")
+    )
