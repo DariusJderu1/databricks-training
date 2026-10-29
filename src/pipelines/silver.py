@@ -23,7 +23,7 @@ LANDING = "/Volumes/insurance/landing/raw"
 # Manually manage: cleaning data, data quality rules, dedup, quarantine
 
 # dlt.read_stream(...) treats the source as an event stream: gives new rows that have arrived since the last checkpoint
-# dlt.read(...) gives the current contents of the dataset as a table
+# dlt.read(...) gives the current contents of the dataset as a table (like all the data)
 
 # TODO: silver_policies (+ explode coverages), silver_claims (normalize fraud_flag),
 #       silver_agents (SCD2 — apply_changes), with expectations per the data dictionary.
@@ -559,3 +559,174 @@ dlt.apply_changes(
     sequence_by=F.col("_ingest_ts"),
     stored_as_scd_type=1  
 )
+
+####################################################################################
+
+# PAYMENTS
+
+@dlt.view(name="prepare_silver_payments", comment="Cleans payments and assigns validation reasons")
+def prepare_silver_payments():
+    payments = dlt.read_stream("bronze_payments")
+
+    policies = (
+        dlt.read("silver_policies")
+        .select("policy_id")
+        .withColumn("_policy_exists", F.lit(True))
+    )
+
+    # Policy ID
+    payments = payments.join(
+        policies,
+        on="policy_id",
+        how="left"
+    )
+
+    invalid_policy_id = F.col("_policy_exists").isNull()
+
+
+    # Dates
+    payments = (
+        payments
+        .withColumn(
+            "_paid_date_present",
+            F.col("paid_date").isNotNull()
+        )
+        .withColumn(
+            "due_date",
+            F.expr("try_cast(due_date AS DATE)")
+        )
+        .withColumn(
+            "paid_date",
+            F.expr("try_cast(paid_date AS DATE)")
+        )
+    )
+
+    invalid_due_date = F.col("due_date").isNull()
+
+    invalid_paid_date = (
+        F.col("_paid_date_present")
+        & F.col("paid_date").isNull()
+    )
+
+    future_paid_date = F.coalesce(
+        F.col("paid_date") > F.current_date(),
+        F.lit(False)
+    )
+
+    invalid_dates = (
+        invalid_due_date
+        | invalid_paid_date
+        | future_paid_date
+    )
+
+
+    # Amount paid
+    invalid_amount_paid = (
+        F.col("amount_paid").isNotNull()
+        & (F.col("amount_paid") < 0)
+    )
+
+
+    # Amount due
+    invalid_amount_due = (
+        F.col("amount_due").isNull()
+        | (F.col("amount_due") < 0)
+    )
+
+
+    # Payment method
+    payments = payments.withColumn(
+        "payment_method",
+        F.upper(F.trim("payment_method"))
+    )
+
+    invalid_payment_method = (
+        F.col("payment_method").isNull()
+        | ~F.col("payment_method").isin("ACH", "CARD", "CHECK", "CASH")
+    )
+
+
+    # Status
+    payments = payments.withColumn(
+        "status",
+        F.upper(F.trim("status"))
+    )
+
+    paid_status = F.col("status").isin("PAID", "LATE")
+    unpaid_status = F.col("status").isin("MISSED", "PENDING")
+
+    invalid_status = (
+        F.col("status").isNull()
+        | ~F.col("status").isin("PAID", "LATE", "MISSED", "PENDING")
+        | (
+            paid_status
+            & (
+                F.col("paid_date").isNull()
+                | F.col("amount_paid").isNull()
+            )
+        )
+        | (
+            unpaid_status
+            & (
+                F.col("paid_date").isNotNull()
+                | F.col("amount_paid").isNotNull()
+            )
+        )
+        | (
+            (F.col("status") == "PAID")
+            & (F.col("paid_date") > F.col("due_date"))
+        )
+        | (
+            (F.col("status") == "LATE")
+            & (F.col("paid_date") <= F.col("due_date"))
+        )
+    )
+
+
+    # Assign the first validation failure in the same order as clean_payments.py
+    clean = (
+        payments
+        .withColumn(
+            "_dq_reason",
+            F.when(
+                F.col("policy_id").isNull(),
+                F.lit("missing_policy_id")
+            )
+            .when(
+                invalid_policy_id,
+                F.lit("orphan_policy_id")
+            )
+            .when(
+                invalid_dates,
+                F.when(
+                    invalid_due_date,
+                    F.lit("missing_or_invalid_due_date")
+                )
+                .when(
+                    invalid_paid_date,
+                    F.lit("invalid_paid_date")
+                )
+                .otherwise(F.lit("future_paid_date"))
+            )
+            .when(
+                invalid_amount_paid,
+                F.lit("negative_amount_paid")
+            )
+            .when(
+                invalid_amount_due,
+                F.lit("missing_or_negative_amount_due")
+            )
+            .when(
+                invalid_payment_method,
+                F.lit("invalid_payment_method")
+            )
+            .when(
+                invalid_status,
+                F.lit("invalid_or_inconsistent_status")
+            )
+            .otherwise(F.lit(None).cast("string"))
+        )
+        .drop("_policy_exists", "_paid_date_present")
+    )
+
+    return clean
