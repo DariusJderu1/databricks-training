@@ -748,3 +748,103 @@ def silver_payments():
         .where(F.col("_dq_reason").isNull())
         .drop("_dq_reason")
     )
+
+
+####################################################################################
+
+# TELEMATICS
+
+@dlt.view(name="prepare_silver_telematics", comment="Cleans telematics and assigns validation reasons")
+def prepare_silver_telematics():
+    telematics = dlt.read_stream("bronze_telematics")
+
+
+    # Value casting
+    telematics = (
+        telematics
+        .withColumn(
+            "event_ts",
+            F.expr("try_cast(event_ts AS TIMESTAMP)")
+        )
+        .withColumn(
+            "latitude",
+            F.expr("try_cast(latitude AS DOUBLE)")
+        )
+        .withColumn(
+            "longitude",
+            F.expr("try_cast(longitude AS DOUBLE)")
+        )
+        .withColumn(
+            "speed_kmh",
+            F.expr("try_cast(speed_kmh AS DOUBLE)")
+        )
+    )
+
+
+    # Null columns
+    missing_event_id = F.col("event_id").isNull()
+    missing_or_invalid_event_ts = F.col("event_ts").isNull()
+    missing_latitude = F.col("latitude").isNull()
+    missing_longitude = F.col("longitude").isNull()
+    missing_speed = F.col("speed_kmh").isNull()
+
+
+    # Out of bounds
+    invalid_latitude = (
+        (F.col("latitude") < -90)
+        | (F.col("latitude") > 90)
+    )
+
+    invalid_longitude = (
+        (F.col("longitude") < -180)
+        | (F.col("longitude") > 180)
+    )
+
+    invalid_speed = (
+        (F.col("speed_kmh") < 0)
+        | (F.col("speed_kmh") > 300)
+    )
+
+
+    # Assign the first validation failure in the same order as clean_telematics.py
+    clean = (
+        telematics
+        .withColumn(
+            "_dq_reason",
+            F.when(
+                missing_event_id,
+                F.lit("missing_event_id")
+            )
+            .when(
+                missing_or_invalid_event_ts,
+                F.lit("missing_or_invalid_event_ts")
+            )
+            .when(
+                missing_latitude,
+                F.lit("missing_latitude")
+            )
+            .when(
+                missing_longitude,
+                F.lit("missing_longitude")
+            )
+            .when(
+                missing_speed,
+                F.lit("missing_speed")
+            )
+            .when(
+                invalid_latitude,
+                F.lit("latitude_out_of_bounds")
+            )
+            .when(
+                invalid_longitude,
+                F.lit("longitude_out_of_bounds")
+            )
+            .when(
+                invalid_speed,
+                F.lit("speed_out_of_bounds")
+            )
+            .otherwise(F.lit(None).cast("string"))
+        )
+    )
+
+    return clean
