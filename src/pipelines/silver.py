@@ -868,3 +868,71 @@ def silver_telematics():
         .withWatermark("event_ts", "2 hours")
         .dropDuplicates(["event_id", "event_ts"])
     )
+
+
+####################################################################################
+
+# AGENTS
+
+@dlt.view(name="prepare_silver_agents", comment="Cleans agents and prepares them for SCD Type 2 processing")
+@dlt.expect_or_drop("valid_id", "agent_id IS NOT NULL")
+def prepare_silver_agents():
+    agents = dlt.read_stream("bronze_agents")
+
+
+    # Cleaning
+    agents = (
+        agents
+        .withColumn(
+            "first_name",
+            F.trim("first_name")
+        )
+        .withColumn(
+            "last_name",
+            F.trim("last_name")
+        )
+        .withColumn(
+            "branch",
+            F.trim("branch")
+        )
+        .withColumn(
+            "status",
+            F.upper(F.trim("status"))
+        )
+        .withColumn(
+            "region",
+            F.initcap(F.trim("region"))
+        )
+        .withColumn(
+            "commission_rate",
+            F.col("commission_rate").cast("double")
+        )
+        .withColumn(
+            "updated_at",
+            F.to_timestamp("updated_at")
+        )
+    )
+
+    return agents
+
+
+dlt.create_streaming_table(name="silver_agents")
+
+
+dlt.apply_changes(
+    target="silver_agents",
+    source="prepare_silver_agents",
+    keys=["agent_id"], # used to identify the row 
+    sequence_by=F.col("updated_at"), # used in scd2 to know what row is the current or old
+    track_history_column_list=[
+        "first_name",
+        "last_name",
+        "email",
+        "branch",
+        "region",
+        "state",
+        "status",
+        "commission_rate"
+    ],# A change in one of these columns creates a new SCD2 version
+    stored_as_scd_type=2 # When an agent changes, keep the older version and add the new version as the current one
+)
