@@ -848,3 +848,12 @@ def prepare_silver_telematics():
     )
 
     return clean
+
+
+# Quarantine for telematics
+@dlt.table(name="silver_telematics_quarantine")
+def silver_telematics_quarantine():
+    return (
+        dlt.read_stream("prepare_silver_telematics")
+        .where(F.col("_dq_reason").isNotNull())
+    )
