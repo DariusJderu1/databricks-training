@@ -857,3 +857,14 @@ def silver_telematics_quarantine():
         dlt.read_stream("prepare_silver_telematics")
         .where(F.col("_dq_reason").isNotNull())
     )
+
+
+@dlt.table(name="silver_telematics")
+def silver_telematics():
+    return (
+        dlt.read_stream("prepare_silver_telematics")
+        .where(F.col("_dq_reason").isNull())
+        .drop("_dq_reason")
+        .withWatermark("event_ts", "2 hours")
+        .dropDuplicates(["event_id", "event_ts"])
+    )
