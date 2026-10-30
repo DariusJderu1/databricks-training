@@ -8,20 +8,23 @@
 #   databricks bundle run insurance_ingest -t dev
 #
 # Fill in your workspace host(s) below (or set them via DATABRICKS_HOST / a CLI profile).
+
+# the deployable project package 
 bundle:
   name: insurance-lakehouse
 
 variables:
   catalog:
     description: Unity Catalog for the project.
-    default: insurance
+    default: insurance 
   pipeline_schema:
     description: Schema the declarative pipeline materializes into.
-    default: medallion
+    default: medallion # one schema instead of 3 for simplificaton
   notification_email:
     description: Email for job failure / DQ alerts.
-    default: you@example.com
+    default: jderudarius@gmail.com
 
+# This tells Databricks to load all YAML files inside resources/
 include:
   - resources/*.yml
 
@@ -29,26 +32,26 @@ include:
 # passes a per-user schema prefix into the pipeline/job so people sharing a workspace don't
 # collide. `prod` runs as a service identity with schedules live.
 targets:
-  dev:
-    mode: development
-    default: true
+  dev: # the name of the deployment target
+    mode: development # the development mode
+    default: true # commands such as databricks bundle deploy use dev by default unless you explicitly specify another target
     workspace:
-      host: https://YOUR-WORKSPACE.cloud.databricks.com
+      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com/browse?o=7474650233247037
     variables:
-      pipeline_schema: medallion_dev
+      pipeline_schema: medallion_dev # overrides the global default "medallion"
 
   test:
     mode: development
     workspace:
-      host: https://YOUR-WORKSPACE.cloud.databricks.com
+      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com/browse?o=7474650233247037
     variables:
       pipeline_schema: medallion_test
 
   prod:
     mode: production
     workspace:
-      host: https://YOUR-WORKSPACE.cloud.databricks.com
+      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com/browse?o=7474650233247037
     run_as:
-      user_name: you@example.com
+      user_name: jderudarius@gmail.com
     variables:
       pipeline_schema: medallion
