@@ -2,33 +2,37 @@
 # Flow: land delta -> run the declarative pipeline -> run DQ tests -> conditional branch
 #       (on DQ failure: notify + stop; on success: publish/refresh the dashboard).
 # Referenced by databricks.yml; deployed with `databricks bundle deploy`.
+
+# This defines a Databricks Job. 
+# A job A job orchestrates tasks: it decides when things run and in what order.
+
 resources:
   jobs:
-    insurance_ingest:
-      name: insurance-ingest-${bundle.target}
+    insurance_ingest: # Manage a job whose internal identifier is insurance_ingest
+      name: insurance-ingest-${bundle.target} # the job name - depending on the target selected with -t.
       email_notifications:
         on_failure:
           - ${var.notification_email}
       # Data-driven trigger: kick off when new telematics files land (vs a cron schedule).
-      trigger:
-        file_arrival:
-          url: /Volumes/${var.catalog}/landing/raw/telematics
+      trigger: # start the job
+        file_arrival: # when new files arrive in the telematics folder
+          url: /Volumes/${var.catalog}/landing/raw/telematics # in here
       # schedule:                       # time-based alternative
       #   quartz_cron_expression: "0 0 6 * * ?"
       #   timezone_id: UTC
 
-      tasks:
-        - task_key: land_delta
+      tasks: # this is the job's workflow. Each task is a node in the DAG
+        - task_key: land_delta # Task identified as land_delta
           # TODO: create this notebook to upload/generate the next delta batch.
           notebook_task:
-            notebook_path: ../notebooks/land_delta
-          max_retries: 2
-          min_retry_interval_millis: 60000
+            notebook_path: ../notebooks/land_delta # it tries to run this notebook
+          max_retries: 2 # it retries up to 2 times after failure
+          min_retry_interval_millis: 60000 # waiting at leat 1 min between them
 
-        - task_key: run_pipeline
-          depends_on:
-            - task_key: land_delta
-          pipeline_task:
+        - task_key: run_pipeline # this runs only after land_data succeeds
+          depends_on: # the task runs only after land_data succeeds. this creates the dependency land_delta -> run_pipeline
+            - task_key: land_delta 
+          pipeline_task: # this says that the task should start a lakeflow pipeline
             pipeline_id: ${resources.pipelines.insurance_pipeline.id}
 
         - task_key: dq_tests
