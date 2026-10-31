@@ -25,6 +25,9 @@ LANDING = "/Volumes/insurance/landing/raw"
 # dlt.read_stream(...) treats the source as an event stream: gives new rows that have arrived since the last checkpoint
 # dlt.read(...) gives the current contents of the dataset as a table (like all the data)
 
+# The expectations, for example @dlt.expect - checks the rows from the micro-batch newly added to the table, after the trims() lowers() and so on - like it checks the df returned by the function
+# the same for @dlt.expect_or_drop - erases the row on the micro-batch from the data frame returned by the function
+
 # TODO: silver_policies (+ explode coverages), silver_claims (normalize fraud_flag),
 #       silver_agents (SCD2 — apply_changes), with expectations per the data dictionary.
 
@@ -33,7 +36,8 @@ LANDING = "/Volumes/insurance/landing/raw"
 
 @dlt.view(name="prepare_silver_customer", comment="Cleans customer data and assigns validation reasons before splitting valid and quarantined records")
 @dlt.expect_or_drop("valid_customer_id", "customer_id IS NOT NULL")
-@dlt.expect("has_email", "email IS NOT NULL")
+@dlt.expect("has_email", "email IS NOT NULL") # just the warning - does not delete the row
+@dlt.expect("valid_record", "_dq_reason IS NULL") # this is to count all the rows that have a dq_reason (and implicitly those who don't) in order to create the dq_scorecard. use on this view because the others don't have all the rows (including the dirty and clean ones)
 def prepare_silver_customers():
     customers = dlt.read_stream("bronze_customers") # a streaming data frame - it only processes the new data using the checkpoints
     states = dlt.read(config.table("bronze", "ref_us_states"))
@@ -167,6 +171,7 @@ dlt.apply_changes(
 # POLICIES
 
 @dlt.view(name="prepare_silver_policies", comment="Cleans policies and assigns validation reasons")
+@dlt.expect("valid_record", "_dq_reason IS NULL")
 def prepare_silver_policies():
     policies = dlt.read_stream("bronze_policies")
     customers = dlt.read("silver_customers")
@@ -376,6 +381,7 @@ dlt.apply_changes(
 # CLAIMS
 
 @dlt.view(name="prepare_silver_claims", comment="Cleans claims and assigns validation reasons before splitting valid and quarantined records")
+@dlt.expect("valid_record", "_dq_reason IS NULL")
 def prepare_silver_claims():
     TRUE_TOKENS = ["true", "y", "yes", "1"]
 
@@ -565,6 +571,7 @@ dlt.apply_changes(
 # PAYMENTS
 
 @dlt.view(name="prepare_silver_payments", comment="Cleans payments and assigns validation reasons")
+@dlt.expect("valid_record", "_dq_reason IS NULL")
 def prepare_silver_payments():
     payments = dlt.read_stream("bronze_payments")
 
@@ -755,6 +762,7 @@ def silver_payments():
 # TELEMATICS
 
 @dlt.view(name="prepare_silver_telematics", comment="Cleans telematics and assigns validation reasons")
+@dlt.expect("valid_record", "_dq_reason IS NULL")
 def prepare_silver_telematics():
     telematics = dlt.read_stream("bronze_telematics")
 

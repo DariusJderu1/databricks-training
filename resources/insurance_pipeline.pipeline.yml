@@ -5,6 +5,7 @@
 # Notes to myself:
 # This file defines the Lakeflow pipeline resource. 
 # It tells Databricks what transformation files to run, the destinations (catalog.schema), settings etc
+# The pipeline DAG is automatically created
 
 resources: # the top level section for Databricks resources managed by the bundle
   pipelines: # we want to manage one pipeline
