@@ -3,9 +3,9 @@
 # dev / test / prod with `databricks bundle validate|deploy|run`. (Exam domain 5 — M7.)
 #
 # Quick start:
-#   databricks bundle validate -t dev
-#   databricks bundle deploy   -t dev
-#   databricks bundle run insurance_ingest -t dev
+#   databricks bundle validate -t dev             - checks if the bundle is configured correctly (settings, yaml files, references)
+#   databricks bundle deploy   -t dev             - publishes the project in Databricks Workspace (uploads the files, creates/updates the pipelines and jobs)
+#   databricks bundle run insurance_ingest -t dev - starts the job
 #
 # Fill in your workspace host(s) below (or set them via DATABRICKS_HOST / a CLI profile).
 

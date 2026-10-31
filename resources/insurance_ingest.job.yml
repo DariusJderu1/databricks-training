@@ -19,7 +19,7 @@ resources:
       # Data-driven trigger: kick off when new telematics files land (vs a cron schedule).
       trigger: # start the job
         file_arrival: # when new files arrive in the telematics folder
-          url: /Volumes/${var.catalog}/landing/raw/telematics # in here
+          url: /Volumes/${var.catalog}/landing/raw/telematics/ # in here
       # schedule:                       # time-based alternative
       #   quartz_cron_expression: "0 0 6 * * ?"
       #   timezone_id: UTC

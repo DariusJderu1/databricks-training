@@ -11,12 +11,13 @@ resources: # the top level section for Databricks resources managed by the bundl
   pipelines: # we want to manage one pipeline
     insurance_pipeline: # identifier for the pipeline resource
       name: insurance-medallion-${bundle.target} # The visible in Databricks pipeline name: ${bundle.target} will be dev/test/prod depending on the target used (dev - target name, -t dev - select the target, mode: development - the deployment behavior)
+      root_path: ${workspace.file_path} # in order to have any folder for import available - set as root for the pipeline the path to the folder from Workspace where the files of the project are uploaded
       # the 2 below represent the location of the datasets created by the pipeline
       catalog: ${var.catalog} # the catalog in that variable from databricks.yml
       schema: ${var.pipeline_schema} # the schema from the variable - depends on the target (deployment mode)
       serverless: true # run using serverless compute - you don't manually configure the cluster size or when to stop / start one
       photon: true # optimized execution engine
-      development: true            # the pipeline is used for development and frequent iteration - set false in production via the target override if desired
+      # development: true            # the pipeline is used for development and frequent iteration - set false in production via the target override if desired
       continuous: false            # triggered (run by the job); not always-on - the pipeline is not always running - it waits until something explicitly starts it
       configuration: # this defines configuration values available to the pipeline code at runtime
         # exposed to the pipeline code; ties to src/common/config.py DEV_SCHEMA_PREFIX
