@@ -39,7 +39,7 @@ resources:
             pipeline_id: ${resources.pipelines.insurance_pipeline.id} # connects to the pipeline created in the other file 
 
         - task_key: dq_tests
-          depends_on: # this tasks runs only after run_pipeline succeeds
+          depends_on: # this tasks runs only after run_pipeline finishes successfully
             - task_key: run_pipeline
           # TODO: notebook that runs DQ assertions and sets a task value 'status' = PASS/FAIL.
           notebook_task:
@@ -52,19 +52,19 @@ resources:
         - task_key: check_dq
           depends_on:
             - task_key: dq_tests
-          condition_task:
-            op: EQUAL_TO
-            left: "{{tasks.dq_tests.values.status}}"
-            right: "PASS"
+          condition_task: # this does not execute a notebook - evaluates a condition in the job
+            op: EQUAL_TO # operation - equal to
+            left: "{{tasks.dq_tests.values.status}}" # access the variable published by the dq_tests notebook
+            right: "PASS" # this is the expected value
 
         # runs only when check_dq is TRUE
         - task_key: publish_dashboard
-          depends_on:
-            - task_key: check_dq
-              outcome: "true"
+          depends_on: 
+            - task_key: check_dq # depends on the task above
+              outcome: "true" # and it must return true
           # TODO: dashboard_task (refresh the AI/BI dashboard) — see M10.
           notebook_task:
-            notebook_path: ../notebooks/publish_dashboard
+            notebook_path: ../notebooks/publish_dashboard.ipynb
 
         # runs only when check_dq is FALSE
         - task_key: notify_dq_failure
@@ -72,4 +72,4 @@ resources:
             - task_key: check_dq
               outcome: "false"
           notebook_task:
-            notebook_path: ../notebooks/notify_dq_failure
+            notebook_path: ../notebooks/notify_dq_failure.ipynb
