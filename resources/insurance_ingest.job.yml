@@ -44,7 +44,7 @@ resources:
           # TODO: notebook that runs DQ assertions and sets a task value 'status' = PASS/FAIL.
           notebook_task:
             notebook_path: ../notebooks/dq_tests.ipynb
-            base_parameters: 
+            base_parameters: # gives the necessary params down to the notebook
               catalog: ${var.catalog}
               pipeline_schema: ${var.pipeline_schema}
           max_retries: 1
