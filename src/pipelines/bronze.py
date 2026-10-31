@@ -70,6 +70,7 @@ def bronze_policies():
     return (
         spark.readStream.format("cloudFiles")
         .option("cloudFiles.format", "json")
+        .option("cloudFiles.inferColumnTypes", "true") # this is for interpreting the coverages array as the correct type for exploding in silver, not just a string
         .option("multiLine", "true")
         .option("cloudFiles.schemaEvolutionMode", "addNewColumns")
         .option("rescuedDataColumn", "_rescued_data")
