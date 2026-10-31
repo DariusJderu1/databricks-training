@@ -2,8 +2,9 @@
 # Referenced by databricks.yml; deployed with `databricks bundle deploy`.
 # Source lives in src/pipelines/ (start from either the .sql or the .py — not both).
 
+# Notes to myself:
 # This file defines the Lakeflow pipeline resource. 
-# It tells Databricks how to run Bronze - Silver - Gold transformations
+# It tells Databricks what transformation files to run, the destinations (catalog.schema), settings etc
 
 resources: # the top level section for Databricks resources managed by the bundle
   pipelines: # we want to manage one pipeline

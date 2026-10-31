@@ -3,8 +3,11 @@
 #       (on DQ failure: notify + stop; on success: publish/refresh the dashboard).
 # Referenced by databricks.yml; deployed with `databricks bundle deploy`.
 
+# Notes to myself:
 # This defines a Databricks Job. 
-# A job A job orchestrates tasks: it decides when things run and in what order.
+# A job orchestrates tasks: it decides when things run and in what order.
+# Basically the workflow that coordinates the tasks
+# A job DAG can execute a pipeline DAG
 
 resources:
   jobs:
@@ -25,22 +28,25 @@ resources:
         - task_key: land_delta # Task identified as land_delta
           # TODO: create this notebook to upload/generate the next delta batch.
           notebook_task:
-            notebook_path: ../notebooks/land_delta # it tries to run this notebook
+            notebook_path: ../notebooks/land_delta.ipynb # it tries to run this notebook
           max_retries: 2 # it retries up to 2 times after failure
           min_retry_interval_millis: 60000 # waiting at leat 1 min between them
 
-        - task_key: run_pipeline # this runs only after land_data succeeds
+        - task_key: run_pipeline 
           depends_on: # the task runs only after land_data succeeds. this creates the dependency land_delta -> run_pipeline
             - task_key: land_delta 
-          pipeline_task: # this says that the task should start a lakeflow pipeline
-            pipeline_id: ${resources.pipelines.insurance_pipeline.id}
+          pipeline_task: # this says that the task should start a lakeflow pipeline, not a notebook sql query etc.
+            pipeline_id: ${resources.pipelines.insurance_pipeline.id} # connects to the pipeline created in the other file 
 
         - task_key: dq_tests
-          depends_on:
+          depends_on: # this tasks runs only after run_pipeline succeeds
             - task_key: run_pipeline
           # TODO: notebook that runs DQ assertions and sets a task value 'status' = PASS/FAIL.
           notebook_task:
-            notebook_path: ../notebooks/dq_tests
+            notebook_path: ../notebooks/dq_tests.ipynb
+            base_parameters: 
+              catalog: ${var.catalog}
+              pipeline_schema: ${var.pipeline_schema}
           max_retries: 1
 
         - task_key: check_dq

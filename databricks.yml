@@ -10,7 +10,8 @@
 # Fill in your workspace host(s) below (or set them via DATABRICKS_HOST / a CLI profile).
 
 
-# File for managing the deployment enviornment
+# Notes to myself:
+# File for managing the deployment bundle
 
 # the deployable project package 
 bundle:
