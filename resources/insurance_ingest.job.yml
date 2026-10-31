@@ -12,7 +12,7 @@
 resources:
   jobs:
     insurance_ingest: # Manage a job whose internal identifier is insurance_ingest
-      name: insurance-ingest-${bundle.target} # the job name - depending on the target selected with -t.
+      name: insurance-ingest-${bundle.target} # the job name (visibile in Databricks) - depending on the target selected with -t.
       email_notifications:
         on_failure:
           - ${var.notification_email}
