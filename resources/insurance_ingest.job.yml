@@ -2,59 +2,75 @@
 # Flow: land delta -> run the declarative pipeline -> run DQ tests -> conditional branch
 #       (on DQ failure: notify + stop; on success: publish/refresh the dashboard).
 # Referenced by databricks.yml; deployed with `databricks bundle deploy`.
+
+# Notes to myself:
+# This defines a Databricks Job. 
+# A job orchestrates tasks: it decides when things run and in what order.
+# Basically the workflow that coordinates the tasks
+# A job DAG can execute a pipeline DAG
+
 resources:
   jobs:
-    insurance_ingest:
-      name: insurance-ingest-${bundle.target}
+    insurance_ingest: # Manage a job whose internal identifier is insurance_ingest
+      name: insurance-ingest-${bundle.target} # the job name (visibile in Databricks) - depending on the target selected with -t.
       email_notifications:
         on_failure:
           - ${var.notification_email}
       # Data-driven trigger: kick off when new telematics files land (vs a cron schedule).
-      trigger:
-        file_arrival:
-          url: /Volumes/${var.catalog}/landing/raw/telematics
+      trigger: # start the job
+        file_arrival: # when new files arrive in the telematics folder
+          url: /Volumes/${var.catalog}/landing/raw/telematics/ # in here
       # schedule:                       # time-based alternative
       #   quartz_cron_expression: "0 0 6 * * ?"
       #   timezone_id: UTC
 
-      tasks:
-        - task_key: land_delta
+      tasks: # this is the job's workflow. Each task is a node in the DAG
+        - task_key: land_delta # Task identified as land_delta
           # TODO: create this notebook to upload/generate the next delta batch.
           notebook_task:
-            notebook_path: ../notebooks/land_delta
-          max_retries: 2
-          min_retry_interval_millis: 60000
+            notebook_path: ../notebooks/land_delta.ipynb # it tries to run this notebook
+          max_retries: 2 # it retries up to 2 times after failure
+          min_retry_interval_millis: 60000 # waiting at leat 1 min between them
 
-        - task_key: run_pipeline
-          depends_on:
-            - task_key: land_delta
-          pipeline_task:
-            pipeline_id: ${resources.pipelines.insurance_pipeline.id}
+        - task_key: run_pipeline 
+          depends_on: # the task runs only after land_data succeeds. this creates the dependency land_delta -> run_pipeline
+            - task_key: land_delta 
+          pipeline_task: # this says that the task should start a lakeflow pipeline, not a notebook sql query etc.
+            pipeline_id: ${resources.pipelines.insurance_pipeline.id} # connects to the pipeline created in the other file 
+
+        # - task_key: build_dq_scorecard
+        #   depends_on: 
+        #     - task_key: run_pipeline
+        #   notebook_task:
+        #     notebook_path: ../notebooks/dq_scorecard.ipynb
 
         - task_key: dq_tests
-          depends_on:
+          depends_on: # this tasks runs only after run_pipeline finishes successfully
             - task_key: run_pipeline
           # TODO: notebook that runs DQ assertions and sets a task value 'status' = PASS/FAIL.
           notebook_task:
-            notebook_path: ../notebooks/dq_tests
+            notebook_path: ../notebooks/dq_tests.ipynb
+            base_parameters: # gives the necessary params down to the notebook
+              catalog: ${var.catalog}
+              pipeline_schema: ${var.pipeline_schema}
           max_retries: 1
 
         - task_key: check_dq
           depends_on:
             - task_key: dq_tests
-          condition_task:
-            op: EQUAL_TO
-            left: "{{tasks.dq_tests.values.status}}"
-            right: "PASS"
+          condition_task: # this does not execute a notebook - evaluates a condition in the job
+            op: EQUAL_TO # operation - equal to
+            left: "{{tasks.dq_tests.values.status}}" # access the variable published by the dq_tests notebook
+            right: "PASS" # this is the expected value
 
         # runs only when check_dq is TRUE
         - task_key: publish_dashboard
-          depends_on:
-            - task_key: check_dq
-              outcome: "true"
+          depends_on: 
+            - task_key: check_dq # depends on the task above
+              outcome: "true" # and it must return true
           # TODO: dashboard_task (refresh the AI/BI dashboard) — see M10.
           notebook_task:
-            notebook_path: ../notebooks/publish_dashboard
+            notebook_path: ../notebooks/publish_dashboard.ipynb
 
         # runs only when check_dq is FALSE
         - task_key: notify_dq_failure
@@ -62,4 +78,4 @@ resources:
             - task_key: check_dq
               outcome: "false"
           notebook_task:
-            notebook_path: ../notebooks/notify_dq_failure
+            notebook_path: ../notebooks/notify_dq_failure.ipynb
