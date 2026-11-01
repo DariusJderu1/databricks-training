@@ -378,3 +378,12 @@ SELECT sq.harsh_score_quintile_number,
 FROM score_quintile sq
 
 GROUP BY sq.harsh_score_quintile_number;
+
+-------------------------------------------------------------------------------
+
+-- dq_scorecard
+
+-- One event log (a delta table) per pipeline
+-- One pipeline - more runs
+-- One run - more events
+-- One evnet - one row in the table
