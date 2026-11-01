@@ -11,7 +11,7 @@ resources: # the top level section for Databricks resources managed by the bundl
   pipelines: # we want to manage one pipeline
     insurance_pipeline: # identifier for the pipeline resource
       name: insurance-medallion-${bundle.target} # The visible in Databricks pipeline name: ${bundle.target} will be dev/test/prod depending on the target used (dev - target name, -t dev - select the target, mode: development - the deployment behavior)
-      root_path: ${workspace.file_path} # in order to have any folder for import available - set as root for the pipeline the path to the folder from Workspace where the files of the project are uploaded
+      root_path: ${workspace.file_path} # in order to have any folder for import available in the files of the pipeline - set as root for the pipeline the path to the folder from Workspace where the files of the project are uploaded
       # the 2 below represent the location of the datasets created by the pipeline
       catalog: ${var.catalog} # the catalog in that variable from databricks.yml
       schema: ${var.pipeline_schema} # the schema from the variable - depends on the target (deployment mode)

@@ -83,7 +83,12 @@ def bronze_policies():
     )
 
 
-@dlt.table(name="bronze_payments", comment="Raw payments via Auto Loader")
+@dlt.table(
+        name="bronze_payments", 
+        comment="Raw payments via Auto Loader",
+        table_properties={
+            "delta.feature.timestampNtz": "supported" # this table can contain this timespampNtz type
+        })
 def bronze_payments():
     return (
         spark.readStream.format("cloudFiles")
