@@ -38,6 +38,12 @@ resources:
           pipeline_task: # this says that the task should start a lakeflow pipeline, not a notebook sql query etc.
             pipeline_id: ${resources.pipelines.insurance_pipeline.id} # connects to the pipeline created in the other file 
 
+        - task_key: build_dq_scorecard
+          depends_on: 
+            - task_key: run_pipeline
+          notebook_task:
+            notebook_path: ../notebooks/dq_scorecard.ipynb
+
         - task_key: dq_tests
           depends_on: # this tasks runs only after run_pipeline finishes successfully
             - task_key: run_pipeline
