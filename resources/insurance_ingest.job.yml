@@ -33,7 +33,7 @@ resources:
           min_retry_interval_millis: 60000 # waiting at leat 1 min between them
 
         - task_key: run_pipeline 
-          depends_on: # the task runs only after land_data succeeds. this creates the dependency land_delta -> run_pipeline
+          depends_on: # the task runs only after land_data finishes. this creates the dependency land_delta -> run_pipeline
             - task_key: land_delta 
           pipeline_task: # this says that the task should start a lakeflow pipeline, not a notebook sql query etc.
             pipeline_id: ${resources.pipelines.insurance_pipeline.id} # connects to the pipeline created in the other file 
@@ -45,7 +45,7 @@ resources:
         #     notebook_path: ../notebooks/dq_scorecard.ipynb
 
         - task_key: dq_tests
-          depends_on: # this tasks runs only after run_pipeline finishes successfully
+          depends_on: # this tasks runs only after run_pipeline finishes 
             - task_key: run_pipeline
           # TODO: notebook that runs DQ assertions and sets a task value 'status' = PASS/FAIL.
           notebook_task:
