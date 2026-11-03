@@ -329,8 +329,10 @@ def valid_policy_records():
 
 
 # Creates the the final table for policies
-dlt.create_streaming_table(name="silver_policies")
-
+dlt.create_streaming_table(
+    name="silver_policies",
+    spark_conf={"spark.sql.shuffle.partitions": "100"} # This is the tune for giving a starting point of 100 partitions per shuffle of tables. AQE can choose to raise/decrease the number if needed
+)
 
 # Adds the data in the table from the view and applies SCD1
 dlt.apply_changes(
