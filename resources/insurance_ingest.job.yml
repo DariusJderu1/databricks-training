@@ -63,14 +63,51 @@ resources:
             left: "{{tasks.dq_tests.values.status}}" # access the variable published by the dq_tests notebook
             right: "PASS" # this is the expected value
 
+
         # runs only when check_dq is TRUE
-        - task_key: publish_dashboard
+        - task_key: refresh_executive_loss_premium_dashboard
           depends_on: 
             - task_key: check_dq # depends on the task above
               outcome: "true" # and it must return true
           # TODO: dashboard_task (refresh the AI/BI dashboard) — see M10.
-          notebook_task:
-            notebook_path: ../notebooks/publish_dashboard.ipynb
+          dashboard_task: # databricks finds the published dashboard by ID -> runs the dashboard's dataset SQL queries -> refreshes the dashboard's results
+            dashboard_id: 01f1d85e414011029998ba4fc0341672
+
+        - task_key: refresh_telematics_risk_dashboard
+          depends_on: 
+            - task_key: check_dq # depends on the task above
+              outcome: "true" # and it must return true
+          dashboard_task: # databricks finds the published dashboard by ID -> runs the dashboard's dataset SQL queries -> refreshes the dashboard's results
+            dashboard_id: 01f1d91ba49f19a484d46a6a871b4e23
+
+        - task_key: refresh_customer_retention_dashboard
+          depends_on: 
+            - task_key: check_dq # depends on the task above
+              outcome: "true" # and it must return true
+          dashboard_task: # databricks finds the published dashboard by ID -> runs the dashboard's dataset SQL queries -> refreshes the dashboard's results
+            dashboard_id: 01f1d9252fab1a1e9fcf38c3cb864e34
+
+        - task_key: refresh_distribution_agents_dashboard
+          depends_on: 
+            - task_key: check_dq # depends on the task above
+              outcome: "true" # and it must return true
+          dashboard_task: # databricks finds the published dashboard by ID -> runs the dashboard's dataset SQL queries -> refreshes the dashboard's results
+            dashboard_id: 01f1d9177d2f172cbf29f9d1c5bc7aa3
+
+        - task_key: refresh_claims_fraud_dashboard
+          depends_on: 
+            - task_key: check_dq # depends on the task above
+              outcome: "true" # and it must return true
+          dashboard_task: # databricks finds the published dashboard by ID -> runs the dashboard's dataset SQL queries -> refreshes the dashboard's results
+            dashboard_id: 01f1d911f9351b5d88a15cf16248bbc6
+
+        - task_key: refresh_data_quality_dashboard
+          depends_on: 
+            - task_key: check_dq # depends on the task above
+              outcome: "true" # and it must return true
+          dashboard_task: # databricks finds the published dashboard by ID -> runs the dashboard's dataset SQL queries -> refreshes the dashboard's results
+            dashboard_id: 01f1d95ef4421f71a3e411baf5e5ac3c
+
 
         # runs only when check_dq is FALSE
         - task_key: notify_dq_failure

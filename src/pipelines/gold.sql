@@ -131,7 +131,9 @@ JOIN dim_policy dp ON p.policy_id = dp.policy_id;
 
 -- fact_claims
 
-CREATE OR REFRESH MATERIALIZED VIEW fact_claims AS
+CREATE OR REFRESH MATERIALIZED VIEW fact_claims
+CLUSTER BY (date_key, policy_id) 
+AS
 SELECT
   cl.claim_id,
   cl.policy_id,
