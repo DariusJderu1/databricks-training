@@ -21,7 +21,7 @@ resources: # the top level section for Databricks resources managed by the bundl
       continuous: false            # triggered (run by the job); not always-on - the pipeline is not always running - it waits until something explicitly starts it
       configuration: # this defines configuration values available to the pipeline code at runtime
         # exposed to the pipeline code; ties to src/common/config.py DEV_SCHEMA_PREFIX
-        DEV_SCHEMA_PREFIX: "${workspace.current_user.short_name}"
+        DEV_SCHEMA_PREFIX: "${workspace.current_user.short_name}" # This creates a spark configuration. It is used for adding a prefix before the schema (of a table). Used in case 2 or more persons work in the same catalog and schema. The configuration is used in config.py
       libraries: # this tells the pipeline which source files 
         - file:
             path: ../src/pipelines/bronze.py
