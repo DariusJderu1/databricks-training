@@ -37,6 +37,7 @@ resources:
             - task_key: land_delta 
           pipeline_task: # this says that the task should start a lakeflow pipeline, not a notebook sql query etc.
             pipeline_id: ${resources.pipelines.insurance_pipeline.id} # connects to the pipeline created in the other file 
+          max_retries: 2
 
         # - task_key: build_dq_scorecard
         #   depends_on: 

@@ -124,8 +124,7 @@ SELECT
   dd.date_key,
   CASE WHEN p.status IN ('LATE', 'MISSED') THEN true ELSE false END AS is_overdue
 FROM silver_payments p   
-JOIN dim_date dd ON p.due_date = dd.date
-JOIN dim_policy dp ON p.policy_id = dp.policy_id;
+JOIN dim_date dd ON p.due_date = dd.date;
 
 -------------------------------------------------------------------------------
 
@@ -380,12 +379,3 @@ SELECT sq.harsh_score_quintile_number,
 FROM score_quintile sq
 
 GROUP BY sq.harsh_score_quintile_number;
-
--------------------------------------------------------------------------------
-
--- dq_scorecard
-
--- One event log (a delta table) per pipeline
--- One pipeline - more runs
--- One run - more events
--- One evnet - one row in the table

@@ -38,7 +38,8 @@ SOURCES = ("customers", "policies", "claims", "payments", "agents", "telematics"
 
 def _prefix() -> str:
     """Optional per-user schema prefix for isolated dev sandboxes (bundle dev target)."""
-    return os.environ.get("DEV_SCHEMA_PREFIX", "").strip()
+    # return os.environ.get("DEV_SCHEMA_PREFIX", "").strip()
+    return get_spark.conf.get("DEV_SCHEMA_PREFIX", "").strip() # accesses the spark configuration
 
 
 def schema(layer: str) -> str:
