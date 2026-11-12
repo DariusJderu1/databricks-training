@@ -38,6 +38,7 @@ LANDING = "/Volumes/insurance/landing/raw"
 @dlt.expect_or_drop("valid_customer_id", "customer_id IS NOT NULL")
 @dlt.expect("has_email", "email IS NOT NULL") # just the warning - does not delete the row
 @dlt.expect("valid_record", "_dq_reason IS NULL") # this is to count all the rows that have a dq_reason (and implicitly those who don't) in order to create the dq_scorecard. use on this view because the others don't have all the rows (including the dirty and clean ones)
+@dlt.expect_or_fail("valid_updated_at", "updated_at IS NOT NULL")
 def prepare_silver_customers():
     customers = dlt.read_stream("bronze_customers") # a streaming data frame - it only processes the new data using the checkpoints
     states = dlt.read(config.table("bronze", "ref_us_states"))
@@ -51,9 +52,6 @@ def prepare_silver_customers():
             .withColumn("state_raw", F.upper(F.trim("state")))
             .withColumn("updated_at", F.col("updated_at").try_cast("timestamp"))
     )
-
-    # Updated at 
-    invalid_updated_at = F.col("updated_at").isNull()
 
     # State
     states = states.select("state_code")
@@ -102,10 +100,6 @@ def prepare_silver_customers():
         clean
         .withColumn("_dq_reason",
             F.when(
-                invalid_updated_at,
-                F.lit("invalid_updated_at")
-            )
-            .when(
                 invalid_dob,
                 F.lit("invalid_date_of_birth")
             )
@@ -886,6 +880,7 @@ def silver_telematics():
 
 @dlt.view(name="prepare_silver_agents", comment="Cleans agents and prepares them for SCD Type 2 processing")
 @dlt.expect_or_drop("valid_id", "agent_id IS NOT NULL")
+@dlt.expect_or_fail("valid_agent_timestamp", "updated_at IS NOT NULL")
 def prepare_silver_agents():
     agents = dlt.read_stream("bronze_agents")
 
