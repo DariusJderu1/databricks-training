@@ -40,21 +40,21 @@ targets:
     mode: development # the development mode
     default: true # commands such as databricks bundle deploy use dev by default unless you explicitly specify another target
     workspace:
-      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com/browse?o=7474650233247037
+      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com
     variables:
       pipeline_schema: medallion_dev # overrides the global default "medallion"
 
   test:
     mode: development
     workspace:
-      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com/browse?o=7474650233247037
+      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com
     variables:
       pipeline_schema: medallion_test
 
   prod:
     mode: production
     workspace:
-      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com/browse?o=7474650233247037
+      host: https://dbc-5b27b85d-cb6d.cloud.databricks.com
     run_as:
       user_name: jderudarius@gmail.com
     variables:
